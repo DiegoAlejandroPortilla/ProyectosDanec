@@ -15,6 +15,20 @@ function ExcelToJsonConverter() {
         setFileName(event.target.value);
     };
 
+    function formatFecha(fecha) {
+        if (typeof fecha === 'number') {
+            // Convierte el número serial de Excel a una fecha
+            const parsedDate = XLSX.SSF.parse_date_code(fecha);
+            return `${parsedDate.y}/${String(parsedDate.m).padStart(2, '0')}/${String(parsedDate.d).padStart(2, '0')}`;
+        }
+        if (typeof fecha === 'string') {
+            // Maneja el caso de cadenas en formato "DD/MM/YYYY"
+            const [día, mes, año] = fecha.split('/');
+            return `${año}/${mes.padStart(2, '0')}/${día.padStart(2, '0')}`;
+        }
+        return null; // Maneja valores nulos o no válidos
+    }
+
     const processExcelToJson = async () => {
         if (!excelFile) {
             alert('Por favor, selecciona un archivo Excel.');
@@ -51,9 +65,9 @@ function ExcelToJsonConverter() {
                     Moneda: parseInt(rows[0].MONEDA),
                     Vendedor: rows[0].VENDEDOR,
                     Itinerario: rows[0].ITINERARIO,
-                    Fecha: rows[0].FECHA,
-                    FechaVencimiento: rows[0].FECHAVENCIMIENTO,
-                    FechaEntrega: rows[0].FECHAENTREGA,
+                    Fecha: formatFecha(rows[0].FECHA),
+                    FechaVencimiento: formatFecha(rows[0].FECHAVENCIMIENTO),
+                    FechaEntrega: formatFecha(rows[0].FECHAENTREGA),
                     Observaciones: rows[0].OBSERVACIONES,
                     Observaciones2: rows[0].OBSERVACIONES2,
                     NumeroPedido: rows[0].NUMEROPEDIDO,

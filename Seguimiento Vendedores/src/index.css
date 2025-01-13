@@ -1,0 +1,78 @@
+.app-container {
+  font-family: "Arial", sans-serif;
+  background-color: #f4f6f8;
+  padding: 20px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #1976d2;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+}
+
+.title {
+  margin: 0;
+  font-size: 24px;
+}
+
+.header-image {
+  width: 100%;
+  max-width: 230px;
+  height: auto;
+  border-radius: 10%;
+}
+
+/* Ajuste específico para pantallas pequeñas */
+@media (max-width: 600px) {
+  .header-image {
+    max-width: 150px;
+  }
+
+  .title {
+    font-size: 1.5rem;
+    text-align: center;
+  }
+
+  .header {
+    text-align: center;
+  }
+}
+
+
+.form-container {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.form-box {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.submit-button {
+  align-self: flex-end;
+  background-color: #007bff;
+  color: white;
+}
+
+.table-container {
+  margin-top: 20px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.table-container table {
+  width: 100%;
+}
+
+.table-container th {
+  background-color: #1976d2;
+  color: white;
+}
