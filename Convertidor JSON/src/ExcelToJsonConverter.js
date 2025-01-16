@@ -54,37 +54,39 @@ function ExcelToJsonConverter() {
             Object.entries(groupedData).forEach(([key, rows]) => {
                 const [clientId, documentId] = key.split(',');
                 consolidatedData.push({
-                    Empresa: String(rows[0].EMPRESA),
-                    TipoDocumento: rows[0].TIPODOCUMENTO,
-                    Serie: rows[0].SERIE,
+                    Empresa: String(rows[0].EMPRESA).trim(),
+                    TipoDocumento: String(rows[0].TIPODOCUMENTO).trim(),
+                    Serie: String(rows[0].SERIE).trim(),
                     NumeroDocumento: parseInt(documentId),
-                    Cliente: String(clientId),
+                    Cliente: String(clientId).trim(),
                     Sucursal: parseInt(rows[0].SUCURSAL),
-                    Deposito: rows[0].DEPOSITO,
+                    Deposito: String(rows[0].DEPOSITO).trim(),
                     ListaPrecio: parseInt(rows[0].LISTAPRECIO),
                     Moneda: parseInt(rows[0].MONEDA),
-                    Vendedor: rows[0].VENDEDOR,
-                    Itinerario: rows[0].ITINERARIO,
+                    Vendedor: String(rows[0].VENDEDOR).trim(),
+                    Itinerario: String(rows[0].ITINERARIO).trim(),
                     Fecha: formatFecha(rows[0].FECHA),
                     FechaVencimiento: formatFecha(rows[0].FECHAVENCIMIENTO),
                     FechaEntrega: formatFecha(rows[0].FECHAENTREGA),
-                    Observaciones: rows[0].OBSERVACIONES,
-                    Observaciones2: rows[0].OBSERVACIONES2,
-                    NumeroPedido: rows[0].NUMEROPEDIDO,
-                    NroTranspo: rows[0].TRANSPORTISTA,
-                    NroPlaca: rows[0].PLACA,
-                    NroCarga: rows[0].NROEMBARQUE,
-                    TipoDocJDE: rows[0].TIPODOCUMENTOSJDE,
-                    CondicionP: rows[0].CONDICIONPAGO,
+                    Observaciones: String(rows[0].OBSERVACIONES).trim(),
+                    Observaciones2: String(rows[0].OBSERVACIONES2).trim(),
+                    NumeroPedido: String(rows[0].NUMEROPEDIDO).trim(),
+                    NroTranspo: String(rows[0].TRANSPORTISTA).trim(),
+                    NroPlaca: String(rows[0].PLACA).trim(),
+                    NroCarga: String(rows[0].NROEMBARQUE).trim(),
+                    TipoDocJDE: String(rows[0].TIPODOCUMENTOSJDE).trim(),
+                    CondicionP: String(rows[0].CONDICIONPAGO).trim(),
+                    TotFacJDE: String(rows[0].TOTFACTJDE).trim(),
                     Items: rows.map(row => ({
-                        Articulo: String(row.ARTICULO),
-                        CodReglon: row.CODRENGLON,
+                        Articulo: String(row.ARTICULO).trim(),
+                        CodReglon: String(row.CODRENGLON).trim(),
                         Cantidad: parseInt(row.CANTIDAD),
-                        PrecioVenta: parseFloat(String(row.PRECIOVENTA).replace(',', '.')),
+                        PrecioVenta: parseFloat(String(row.PRECIOVENTA).replace(',', '.').trim()),
                         PorcDescuento: parseInt(row.PORCDESCUENTO),
-                        bonificacion: String(row['BONIFICACION']).toLowerCase() === 'true'
+                        bonificacion: String(row['BONIFICACION']).trim().toLowerCase() === 'true'
                     })),
                 });
+                
             });
 
             const finalData = { documentos: consolidatedData };
