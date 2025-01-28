@@ -17,9 +17,10 @@ import {
   Typography,
   Box,
 } from "@mui/material";
+import { LineChart } from '@mui/x-charts/LineChart';
 import * as XLSX from "xlsx";
 const App = () => {
-  
+
   const [formData, setFormData] = useState({
     vendedor: "",
     horaInicio: "",
@@ -78,7 +79,7 @@ const App = () => {
 
   const validaciones = Object.keys(ubicaciones);
   const vendedores = Object.keys(vendedoresRuta);
-  
+
 
 
   useEffect(() => {
@@ -87,20 +88,19 @@ const App = () => {
       return {
         vendedor,
         tipoRuta,
-        horaInicio: "",
-        clientesPlanificados: "",
-        clientesConVenta: "",
-        clientesSinVenta: "",
-        avanceVentas: "",
-        validaciones: "", // Aseguramos que "validaciones" también se inicie vacío
-        clientesVisitados: 0,
-        clientesConVenta2: "",
-        clientesSinVenta2: "",
-        clientesVisitados2: 0,
-        avanceVentas2: "",
-        AlertasPedidosLejanos: "",
-        visitadosFueraRuta: "",
-        horaFin: "",
+        horaInicio: "08:00",
+        clientesPlanificados: Math.floor(Math.random() * 50) + 10, // Valores aleatorios entre 10 y 50
+        clientesConVenta: Math.floor(Math.random() * 20) + 5, // Valores aleatorios entre 5 y 20
+        clientesSinVenta: Math.floor(Math.random() * 10) + 2, // Valores aleatorios entre 2 y 10
+        avanceVentas: (Math.random() * 1000).toFixed(2), // Avance en ventas aleatorio
+        validaciones: validaciones[Math.floor(Math.random() * validaciones.length)], // Validaciones aleatorias
+        clientesVisitados: Math.floor(Math.random() * 30) + 5,
+        clientesConVenta2: Math.floor(Math.random() * 20) + 3,
+        clientesSinVenta2: Math.floor(Math.random() * 10) + 1,
+        avanceVentas2: (Math.random() * 1500).toFixed(2),
+        AlertasPedidosLejanos: Math.floor(Math.random() * 5), // Alertas aleatorias
+        visitadosFueraRuta: Math.floor(Math.random() * 3), // Valores aleatorios
+        horaFin: "17:00",
       };
     });
     setData(initialData);
@@ -119,11 +119,11 @@ const App = () => {
     const clientesVisitados2 =
       (parseInt(formData.clientesConVenta2) || 0) +
       (parseInt(formData.clientesSinVenta2) || 0);
-  
+
     const existingIndex = data.findIndex(
       (row) => row.vendedor === formData.vendedor
     );
-  
+
     if (existingIndex !== -1) {
       // Si el vendedor ya existe, actualizamos los valores acumulando las sumas
       const updatedData = [...data];
@@ -149,7 +149,7 @@ const App = () => {
         },
       ]);
     }
-  
+
     // Reiniciar el formulario, pero no el estado de 'data'
     setFormData({
       vendedor: "",
@@ -183,7 +183,7 @@ const App = () => {
     if (!planificados || planificados === 0) return 0;
     return ((clientesConVenta2 / planificados) * 100).toFixed(2);
   }
-  
+
 
   const getRowStyle = (row) => {
     const { tipoRuta, avanceVentas } = row;
@@ -227,7 +227,7 @@ const App = () => {
       case "Inicio de Jornada":
         return ["vendedor", "tipoRuta", "horaInicio", "validaciones"];
       case "Avance de Productividad":
-        return ["vendedor", "tipoRuta", "clientesPlanificados","porcentajeDeVisitas1", "avanceVentas"];
+        return ["vendedor", "tipoRuta", "clientesPlanificados", "porcentajeDeVisitas1", "avanceVentas"];
       case "Cumplimiento de Estándares":
         return [
           "vendedor",
@@ -273,13 +273,13 @@ const App = () => {
       "Clientes Planificados",
       "Hora Inicio",
       "Efectividad de Visitas (Medio Día)",
-      "Avance de Ventas(Medio Día)",   
+      "Avance de Ventas(Medio Día)",
       "Efectividad de Visitas (Fin del Día)",
       "Efectividad de Ventas (Fin del Día)",
       "Avance de Ventas(Fin del Día)",
       "Alertas Pedidos fuera lejos del cliente",
       "Visitados Fuera de Ruta",
-      "Hora Fin"     
+      "Hora Fin"
     ];
     const excelData = data.map((row) => ({
       Vendedor: row.vendedor,
@@ -290,10 +290,10 @@ const App = () => {
       "Avance Ventas (Medio Día)": row.avanceVentas,
       "Efectividad de Visitas (Fin del Día)": row.percentaje2,
       "Efectividad de Ventas (Fin del Día)": row.efectividadVentas,
-      "Avance de Ventas(Fin del Día)":row.avanceVentas2,
+      "Avance de Ventas(Fin del Día)": row.avanceVentas2,
       "Alertas Pedidos fuera lejos del cliente": row.AlertasPedidosLejanos,
-      "Visitados Fuera de Ruta":row.visitadosFueraRuta,
-      "Hora Fin":row.horaFin,     
+      "Visitados Fuera de Ruta": row.visitadosFueraRuta,
+      "Hora Fin": row.horaFin,
 
     }));
 
@@ -303,11 +303,19 @@ const App = () => {
 
     XLSX.writeFile(workbook, "datos_vendedores.xlsx");
   };
+  const dataset = data.map((row) => ({
+    vendedor: row.vendedor,
+    clientesVisitados: row.clientesVisitados,
+    clientesPlanificados: row.clientesPlanificados,
+    ventasTotales: row.avanceVentas2,
+    date: new Date(),
+  }));
+
 
 
   return (
     <Container maxWidth="80%" style={{ backgroundColor: "#f4f6f8", padding: "20px", borderRadius: "10px" }}>
-      
+
       <div className="header">
         <Typography variant="h3" className="title">
           Gestión de Vendedores Ibarra
@@ -342,210 +350,82 @@ const App = () => {
           </Select>
         </FormControl>
 
-        <Typography variant="h6">Inicio de Jornada</Typography>
-        <Box sx={{ display: "flex", gap: "20px" }}>
-          <TextField
-            label="Hora de Inicio"
-            type="time"
-            name="horaInicio"
-            value={formData.horaInicio}
-            onChange={handleChange}
-            InputLabelProps={{ shrink: true }}
-          />
-
-          <FormControl style={{ minWidth: 150 }}>
-            <InputLabel>Ubicación</InputLabel>
-            <Select value={formData.validaciones} onChange={handleChange} name="validaciones">
-              {validaciones.map((validacion) => (
-                <MenuItem key={validacion} value={validacion}>
-                  {validacion}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <TextField
-            label="Clientes Planificados"
-            type="number"
-            name="clientesPlanificados"
-            value={formData.clientesPlanificados}
-            onChange={handleChange}
-          />
-        </Box>
-
-        <Typography variant="h6">Avance de Productividad</Typography>
-        <Box sx={{ display: "flex", gap: "20px" }}>
-          <TextField
-            label="Clientes con Venta (Medio día)"
-            type="number"
-            name="clientesConVenta"
-            value={formData.clientesConVenta}
-            onChange={handleChange}
-          />
-          <TextField
-            label="Clientes sin Venta (Medio día)"
-            type="number"
-            name="clientesSinVenta"
-            value={formData.clientesSinVenta}
-            onChange={handleChange}
-          />
-          <TextField
-            label="Avance de Ventas (Medio día)"
-            type="number"
-            name="avanceVentas"
-            value={formData.avanceVentas}
-            onChange={handleChange}
-          />
-        </Box>
-
-        <Typography variant="h6">Cumplimiento de Estándares</Typography>
-        <Box sx={{ display: "flex", gap: "20px" }}>
-          <TextField
-            label="Clientes con Venta (Fin del día)"
-            type="number"
-            name="clientesConVenta2"
-            value={formData.clientesConVenta2}
-            onChange={handleChange}
-          />
-          <TextField
-            label="Clientes sin Venta (Fin del día)"
-            type="number"
-            name="clientesSinVenta2"
-            value={formData.clientesSinVenta2}
-            onChange={handleChange}
-          />
-          <TextField
-            label="Avance de Ventas (Fin del día)"
-            type="number"
-            name="avanceVentas2"
-            value={formData.avanceVentas2}
-            onChange={handleChange}
-          />
-          <TextField
-            label="Alertas Pedidos Lejanos al Cliente"
-            type="number"
-            name="AlertasPedidosLejanos"
-            value={formData.AlertasPedidosLejanos}
-            onChange={handleChange}
-          />
-          <TextField
-            label="visitados Fuera de Ruta"
-            type="number"
-            name="visitadosFueraRuta"
-            value={formData.visitadosFueraRuta}
-            onChange={handleChange}
-          />
-        </Box>
-
-        <Typography variant="h6">Fin de Jornada</Typography>
-        <Box sx={{ display: "flex", gap: "80px" }}>
-          <TextField
-            label="Hora de Finalización"
-            type="time"
-            name="horaFin"
-            value={formData.horaFin}
-            onChange={handleChange}
-            InputLabelProps={{ shrink: true }}
-          />
-        </Box>
-
-        <Button
-        variant="contained"
-        color="primary"
-        onClick={handleSubmit}
-        fullWidth
-        sx={{
-          padding: "10px",
-          fontSize: "16px",
-          backgroundColor: "#007bff",
-          "&:hover": { backgroundColor: "#0056b3" },
-        }}
-        >
-          Agregar
-        </Button>
-        
       </Box>
-      
+
       <FormControl fullWidth>
-          <InputLabel>Filtro</InputLabel>
-          <Select value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <MenuItem value="Inicio de Jornada">Inicio de Jornada</MenuItem>
-            <MenuItem value="Avance de Productividad">Avance de Productividad</MenuItem>
-            <MenuItem value="Cumplimiento de Estándares">Cumplimiento de Estándares</MenuItem>
-            <MenuItem value="Tabla Completa">Tabla Completa</MenuItem>
-          </Select>
-        </FormControl>
+        <InputLabel>Filtro</InputLabel>
+        <Select value={filter} onChange={(e) => setFilter(e.target.value)}>
+          <MenuItem value="Inicio de Jornada">Inicio de Jornada</MenuItem>
+          <MenuItem value="Avance de Productividad">Avance de Productividad</MenuItem>
+          <MenuItem value="Cumplimiento de Estándares">Cumplimiento de Estándares</MenuItem>
+          <MenuItem value="Tabla Completa">Tabla Completa</MenuItem>
+        </Select>
+      </FormControl>
 
 
       <TableContainer component={Paper} sx={{ marginTop: "40px", boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.1)" }}>
         <Table>
           <TableHead sx={{ backgroundColor: "#1976d2" }}>
-          <TableRow>
-        {filteredColumns.includes("vendedor") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Vendedor</TableCell>
-        )}
-        {filteredColumns.includes("tipoRuta") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Tipo de Ruta</TableCell>
-        )}
-        {filteredColumns.includes("horaInicio") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Hora de Inicio</TableCell>
-        )}
-        {filteredColumns.includes("validaciones") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Ubicación</TableCell>
-        )}
-        {filteredColumns.includes("clientesPlanificados") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes Planificados</TableCell>
-        )}
-        {filteredColumns.includes("clientesVisitados") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes Visitados(Medio día)</TableCell>
-        )}
-        {filteredColumns.includes("clientesConVenta") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes con Venta(Medio día)</TableCell>
-        )}
-        {filteredColumns.includes("clientesSinVenta") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes sin Venta(Medio día)</TableCell>
-        )}
-        {filteredColumns.includes("porcentajeDeVisitas1") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Porcentaje de Visitas(Medio día)</TableCell>
-        )}
-        {filteredColumns.includes("avanceVentas") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Avance de Ventas</TableCell>
-        )}
-        {filteredColumns.includes("clientesVisitados2") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes Visitados(Fin del día)</TableCell>
-        )}
-        {filteredColumns.includes("clientesConVenta2") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes con Venta (Fin del día)</TableCell>
-        )}
-        {filteredColumns.includes("clientesSinVenta2") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes sin Venta (Fin del día)</TableCell>
-        )}
-        {filteredColumns.includes("porcentajeDeVisitas2") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Porcentaje de Visitas(Fin del día)</TableCell>
-        )}
-        {filteredColumns.includes("efectividadDeVentas") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Efectividad de Ventas(Fin del día)</TableCell>
-        )}
-        {filteredColumns.includes("avanceVentas2") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Avance de Ventas (Fin del día)</TableCell>
-        )}
-        {filteredColumns.includes("AlertasPedidosLejanos") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Alertas Pedidos Lejanos al Cliente</TableCell>
-        )}
-        {filteredColumns.includes("visitadosFueraRuta") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Visitados Fuera de Ruta</TableCell>
-        )}
-        {filteredColumns.includes("horaFin") && (
-          <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Hora de Finalización</TableCell>
-        )}
-      </TableRow>
+            <TableRow>
+              {filteredColumns.includes("vendedor") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Vendedor</TableCell>
+              )}
+              {filteredColumns.includes("tipoRuta") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Tipo de Ruta</TableCell>
+              )}
+              {filteredColumns.includes("horaInicio") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Hora de Inicio</TableCell>
+              )}
+              {filteredColumns.includes("validaciones") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Ubicación</TableCell>
+              )}
+              {filteredColumns.includes("clientesPlanificados") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes Planificados</TableCell>
+              )}
+              {filteredColumns.includes("clientesVisitados") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes Visitados(Medio día)</TableCell>
+              )}
+              {filteredColumns.includes("clientesConVenta") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes con Venta(Medio día)</TableCell>
+              )}
+              {filteredColumns.includes("clientesSinVenta") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes sin Venta(Medio día)</TableCell>
+              )}
+              {filteredColumns.includes("porcentajeDeVisitas1") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Porcentaje de Visitas(Medio día)</TableCell>
+              )}
+              {filteredColumns.includes("avanceVentas") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Avance de Ventas</TableCell>
+              )}
+              {filteredColumns.includes("clientesVisitados2") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes Visitados(Fin del día)</TableCell>
+              )}
+              {filteredColumns.includes("clientesConVenta2") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes con Venta (Fin del día)</TableCell>
+              )}
+              {filteredColumns.includes("clientesSinVenta2") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Clientes sin Venta (Fin del día)</TableCell>
+              )}
+              {filteredColumns.includes("porcentajeDeVisitas2") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Porcentaje de Visitas(Fin del día)</TableCell>
+              )}
+              {filteredColumns.includes("efectividadDeVentas") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Efectividad de Ventas(Fin del día)</TableCell>
+              )}
+              {filteredColumns.includes("avanceVentas2") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Avance de Ventas (Fin del día)</TableCell>
+              )}
+              {filteredColumns.includes("horaFin") && (
+                <TableCell sx={{ color: "#ffffff", fontWeight: "bold" }}>Hora de Finalización</TableCell>
+              )}
+            </TableRow>
 
           </TableHead>
           <TableBody>
             {data.map((row, index) => {
-             const percentage = calculatePercentage(row.clientesVisitados, row.clientesPlanificados);
-             const percentage2 = calculatePercentage2(row.clientesVisitados2, row.clientesPlanificados);
-             const efectividadVentas = calculateEfectividadVentas(row.clientesConVenta2, row.clientesPlanificados);
+              const percentage = calculatePercentage(row.clientesVisitados, row.clientesPlanificados);
+              const percentage2 = calculatePercentage2(row.clientesVisitados2, row.clientesPlanificados);
+              const efectividadVentas = calculateEfectividadVentas(row.clientesConVenta2, row.clientesPlanificados);
               const [hours, minutes] = row.horaInicio.split(":").map(Number);
               const totalHours = hours + minutes / 60;
               const [hours1, minutes1] = row.horaFin.split(":").map(Number);
@@ -586,9 +466,9 @@ const App = () => {
                     <TableCell>{row.clientesSinVenta}</TableCell>
                   )}
                   {filteredColumns.includes("porcentajeDeVisitas1") && (
-                    <TableCell style={{color: percentage < 40 ? "red" : "green",}}>
-                    {percentage}%
-                  </TableCell>
+                    <TableCell style={{ color: percentage < 40 ? "red" : "green", }}>
+                      {percentage}%
+                    </TableCell>
                   )}
                   {filteredColumns.includes("avanceVentas") && (
                     <TableCell style={getRowStyle(row)}>
@@ -606,52 +486,75 @@ const App = () => {
                   )}
                   {filteredColumns.includes("porcentajeDeVisitas2") && (
                     <TableCell
-                    style={{
-                      color: percentage2 < 60 ? "red" : "green",
-                    }}
-                  >
-                    {percentage2}%
-                  </TableCell>
+                      style={{
+                        color: percentage2 < 60 ? "red" : "green",
+                      }}
+                    >
+                      {percentage2}%
+                    </TableCell>
                   )}
                   {filteredColumns.includes("efectividadDeVentas") && (
                     <TableCell
-                    style={{
-                      color: efectividadVentas < 60 ? "red" : "green",
-                    }}
-                  >
-                    {efectividadVentas}%
-                  </TableCell>
+                      style={{
+                        color: efectividadVentas < 60 ? "red" : "green",
+                      }}
+                    >
+                      {efectividadVentas}%
+                    </TableCell>
                   )}
                   {filteredColumns.includes("avanceVentas2") && (
                     <TableCell style={getRowStyle2(row)}>
                       ${isNaN(row.avanceVentas2) || row.avanceVentas2 === "" ? "0.00" : parseFloat(row.avanceVentas2).toFixed(2)}
                     </TableCell>
                   )}
-                  {filteredColumns.includes("AlertasPedidosLejanos") && (
-                    <TableCell style={{ color: row.AlertasPedidosLejanos > 10 ? "red" : "black" }}>
-                      {row.AlertasPedidosLejanos}
-                    </TableCell>
-                  )}
-                  {filteredColumns.includes("visitadosFueraRuta") && (
-                    <TableCell style={{ color: row.visitadosFueraRuta > 5 ? "red" : "black" }}>
-                      {row.visitadosFueraRuta}
-                    </TableCell>
-                  )}
                   {filteredColumns.includes("horaFin") && (
                     <TableCell
-                    style={{
-                      color: totalHours1 < "15.30" || totalHours1 > "16.45" ? "red" : "green",
-                    }}
-                  >
-                    {row.horaFin}
+                      style={{
+                        color: totalHours1 < "15.30" || totalHours1 > "16.45" ? "red" : "green",
+                      }}
+                    >
+                      {row.horaFin}
                     </TableCell>
                   )}
                 </TableRow>
+
+
               );
             })}
+
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Gráfico de Línea */}
+      <Box sx={{ marginTop: "40px", textAlign: "center" }}>
+        <LineChart
+          dataset={dataset}
+          xAxis={[
+            {
+              id: 'Vendedor',
+              dataKey: 'vendedor',
+              scaleType: 'band',
+            },
+          ]}
+          series={[
+            {
+              id: 'Clientes Con venta',
+              label: 'Clientes con Venta',
+              dataKey: 'clientesVisitados',
+              showMark: true,
+            },
+            {
+              id: 'Clientes Planificados',
+              label: 'Clientes Planificados',
+              dataKey: 'clientesPlanificados',
+              showMark: true,
+            },
+          ]}
+          width={1000}
+          height={400}
+        />
+      </Box>
       <Box sx={{ textAlign: "center", marginTop: "20px" }}>
         <Button variant="contained" color="secondary" onClick={downloadExcel}>
           Descargar Excel

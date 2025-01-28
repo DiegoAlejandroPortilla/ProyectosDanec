@@ -1,38 +1,79 @@
-.App {
-  text-align: center;
+/* Fondo predeterminado para todas las pestañas */
+body, html {
+  height: 100%;
+  background: radial-gradient(circle, #f5f5dc, #a3c4f3); /* Fondo global */
+  font-family: 'Arial', sans-serif;
+  color: rgb(0, 0, 0);
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+/* Fondo específico para cada pestaña */
+.tab-content-wrapper {
+  padding: 20px;
+  /*transition: background 0.3s ease;*/
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
+.tab-content-0 {
+  background: radial-gradient(circle, #f5f5dc, #a3c4f3); /* Fondo para la pestaña 1 */
+}
+
+.tab-content-1 {
+  background: radial-gradient(circle, #fdd5b1, #d4a6e5);
+
+}
+
+/* Estilos comunes */
+button {
+  font-size: 1.2rem;
+  padding: 10px 20px;
+  background: #0ae075;
+  color: rgb(0, 0, 0);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+  transition: background 0.3s ease, transform 0.2s ease;
+}
+
+button:hover {
+  background: #005ecb;
+  transform: scale(1.05);
+}
+
+button:active {
+  background: #190501;
+}
+
+/* Otros estilos */
+@media (max-width: 768px) {
+  .button-container {
+      flex-direction: column;
+      gap: 10px;
+  }
+
+  button {
+      width: 70%;
   }
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+/* Animación para transiciones entre pestañas */
+.tab-content-enter {
+opacity: 0;
+transform: translateX(100%);
 }
 
-.App-link {
-  color: #61dafb;
+.tab-content-enter-active {
+opacity: 1;
+transform: translateX(0);
+transition: opacity 300ms, transform 300ms;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.tab-content-exit {
+opacity: 1;
+transform: translateX(0);
+}
+
+.tab-content-exit-active {
+opacity: 0;
+transform: translateX(-100%);
+transition: opacity 300ms, transform 300ms;
 }

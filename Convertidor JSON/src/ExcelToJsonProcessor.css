@@ -1,0 +1,124 @@
+/* Estilos globales para asegurar que el fondo cubra todo */
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body, html {
+    height: 100%;
+    /*background: radial-gradient(circle, #f5f5dc, #a3c4f3); /* Fondo gradiente */
+    font-family: 'Arial', sans-serif;
+    color: rgb(0, 0, 0);
+}
+
+.processor-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh; /* Asegura que el contenedor ocupe toda la altura */
+    padding: 20px;
+    gap: 20px; /* Espaciado entre los elementos del contenedor */
+}
+
+.logo {
+    width: 350px; /* Ajusta el tamaño según sea necesario */
+    height: auto;
+    margin-bottom: 10px;
+    border-radius: 5px; /* Bordes redondeados */
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+h1 {
+    font-size: 2.0rem;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.file-upload {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+input[type="file"] {
+    font-size: 1.2rem;
+    padding: 10px;
+    border: 2px dashed rgb(0, 0, 0);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.2);
+    color: rgb(0, 0, 0);
+    outline: none;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+input[type="file"]:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+button {
+    font-size: 1.2rem;
+    padding: 15px 30px;
+    background: #007aff;
+    color: white;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+button:hover {
+    background: #005ecb;
+    transform: scale(1.05);
+}
+
+button:active {
+    background: #003f91;
+}
+
+/* Botones de alerta personalizados */
+.swal-actions {
+    display: flex;
+    gap: 10px; /* Espaciado entre botones */
+    justify-content: center;
+}
+
+.swal-cancel-button {
+    background-color: #f44336; /* Botón rojo para cancelar */
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.swal-cancel-button:hover {
+    background-color: #d32f2f;
+}
+
+@media (max-width: 768px) {
+    .processor-container {
+        padding: 10px; /* Reduce el espaciado en pantallas pequeñas */
+    }
+
+    .file-upload {
+        gap: 10px;
+    }
+
+    input[type="file"] {
+        font-size: 1rem;
+        padding: 8px;
+    }
+
+    button {
+        width: 90%; /* Botones ajustados al ancho de la pantalla */
+    }
+}
