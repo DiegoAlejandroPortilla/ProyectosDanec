@@ -3,6 +3,7 @@ import { Tabs, Tab, Box } from "@mui/material";
 import { CSSTransition, TransitionGroup } from "react-transition-group";
 import ExcelToJsonConverter from "./ExcelToJsonConverter";
 import AnotherTransformation from "./AnotherTransformation";
+import GestionVendedores from "./GestionVendedores";
 import "./App.css"; // Asegúrate de que los estilos estén aquí
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
   const renderContent = () => {
     if (tabIndex === 0) return <ExcelToJsonConverter />;
     if (tabIndex === 1) return <AnotherTransformation />;
+    if (tabIndex === 2) return <GestionVendedores />;
     return null;
   };
 
@@ -29,6 +31,7 @@ function App() {
         <Tabs value={tabIndex} onChange={handleTabChange}>
           <Tab label="Embarques" />
           <Tab label="Cartera  " />
+          <Tab label="Extracción Datos Vendedor  " />
         </Tabs>
       </Box>
       <TransitionGroup component={null}>
