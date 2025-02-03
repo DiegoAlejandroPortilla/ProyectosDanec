@@ -52,18 +52,30 @@ function ExcelToJsonCartera() {
         reader.readAsArrayBuffer(excelFile);
     };
 
-    function formatFecha(fecha) {
-        if (!fecha) return "";
+    const formatFecha = (fecha) => {
+        if (!fecha || fecha === 0 || fecha === null || fecha === undefined) {
+            return 'Fecha no proporcionada'; // Mensaje predeterminado para fechas no válidas
+        }
+    
         if (!isNaN(fecha)) {
-            const parsedDate = XLSX.SSF.parse_date_code(Number(fecha));
-            return `${String(parsedDate.d).padStart(2, '0')}/${String(parsedDate.m).padStart(2, '0')}/${parsedDate.y}`;
+            const excelEpoch = (fecha - 25569) * 86400 * 1000; // Convertir desde Excel
+            const excelDate = new Date(excelEpoch);
+            const year = excelDate.getUTCFullYear();
+            const month = String(excelDate.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(excelDate.getUTCDate()).padStart(2, '0');
+            return `${day}/${month}/${year}`;
         }
-        if (typeof fecha === 'string') {
-            const [año, mes, día] = fecha.split('-');
-            return `${día.padStart(2, '0')}/${mes.padStart(2, '0')}/${año}`;
+    
+        const dateParts = fecha.split('/');
+        if (dateParts.length === 3) {
+            const day = String(dateParts[0]).padStart(2, '0');
+            const month = String(dateParts[1]).padStart(2, '0');
+            const year = dateParts[2];
+            return `${day}/${month}/${year}`;
         }
-        return "";
-    }
+    
+        return 'Fecha inválida';
+    };
 
     const saveJsonToFile = () => {
         if (!fileName.trim()) {

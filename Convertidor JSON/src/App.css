@@ -4,6 +4,7 @@ body, html {
   background: radial-gradient(circle, #f5f5dc, #a3c4f3); /* Fondo global */
   font-family: 'Arial', sans-serif;
   color: rgb(0, 0, 0);
+  margin: 0;
 }
 
 /* Fondo específico para cada pestaña */
@@ -18,7 +19,6 @@ body, html {
 
 .tab-content-1 {
   background: radial-gradient(circle, #fdd5b1, #d4a6e5);
-
 }
 
 /* Estilos comunes */
@@ -43,37 +43,65 @@ button:active {
   background: #190501;
 }
 
-/* Otros estilos */
-@media (max-width: 768px) {
+/* Flexbox para los botones */
+.button-container {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+button {
+  width: 200px;
+}
+
+/* Estilos para pantallas más pequeñas */
+@media (max-width: 1024px) {
   .button-container {
       flex-direction: column;
-      gap: 10px;
+      gap: 15px;
   }
 
   button {
-      width: 70%;
+      width: 80%;
+  }
+}
+
+/* Estilos para pantallas móviles */
+@media (max-width: 768px) {
+  body {
+    padding: 10px;
+  }
+
+  .tab-content-wrapper {
+    padding: 15px;
+  }
+
+  button {
+    width: 100%;
+    font-size: 1rem;
   }
 }
 
 /* Animación para transiciones entre pestañas */
 .tab-content-enter {
-opacity: 0;
-transform: translateX(100%);
+  opacity: 0;
+  transform: translateX(100%);
 }
 
 .tab-content-enter-active {
-opacity: 1;
-transform: translateX(0);
-transition: opacity 300ms, transform 300ms;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 300ms, transform 300ms;
 }
 
 .tab-content-exit {
-opacity: 1;
-transform: translateX(0);
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .tab-content-exit-active {
-opacity: 0;
-transform: translateX(-100%);
-transition: opacity 300ms, transform 300ms;
+  opacity: 0;
+  transform: translateX(-100%);
+  transition: opacity 300ms, transform 300ms;
 }
