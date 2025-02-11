@@ -15,7 +15,7 @@ const ExcelReader = () => {
         if (typeof excelTime === "string") return excelTime;
 
         const date = XLSX.SSF.parse_date_code(excelTime);
-        return `${date.H.toString().padStart(2, "0")}:${date.M.toString().padStart(2, "0")}:${date.S.toString().padStart(2, "0")}`;
+        return [date.H, date.M, date.S].map(n => n.toString().padStart(2, "0")).join(":");
     };
 
     const timeToMinutes = (time) => {
@@ -63,8 +63,6 @@ const ExcelReader = () => {
                             countFueraRuta: 0,
                             Clientes_Con_Venta: new Set(),
                             Clientes_Sin_Venta: new Set(),
-                            Clientes_Duplicados: new Set(),
-                            Clientes_Efectivos: new Set(),
                             clientesProcesados: new Map(),
                             tiempoTotalVisitas: 0,
                             cantidadVisitas: 0,
@@ -112,26 +110,29 @@ const ExcelReader = () => {
                     }
                 });
 
+                // Ajuste para evitar clientes duplicados en las métricas
                 Object.values(vendedores).forEach(vendedor => {
-                    vendedor.clientesProcesados.forEach(({ tipos, distancia }, cliente) => {
-                        if (tipos.has("03-Pedido Contado") && tipos.has("00-Registro de Visita")) {
+                    vendedor.clientesProcesados.forEach(({ tipos }, cliente) => {
+                        if (tipos.has("03-Pedido Contado")) {
                             vendedor.Clientes_Con_Venta.add(cliente);
+                            vendedor.Clientes_Sin_Venta.delete(cliente); // Si compró, se elimina de "sin venta"
                         } else if (tipos.has("00-Registro de Visita")) {
-                            vendedor.Clientes_Sin_Venta.add(cliente);
-                        }
-                        if (tipos.size > 1) {
-                            vendedor.Clientes_Duplicados.add(cliente);
-                        }
-                        if (distancia < 50) {
-                            vendedor.Clientes_Efectivos.add(cliente);
+                            if (!vendedor.Clientes_Con_Venta.has(cliente)) { // Solo lo agregamos si NO compró
+                                vendedor.Clientes_Sin_Venta.add(cliente);
+                            }
                         }
                     });
                 });
 
+
+                // Ajuste en el cálculo de Cumplimiento de Ruta (solo clientes únicos)
                 const processedData = Object.values(vendedores).map((vendedor) => {
                     const planificados = vendedor.planificados || "Sin clientes Planificados";
                     const esEspejo = vendedor.Vendedor.endsWith("1") ? "ESPEJO" : null;
                     const tiempoPromedioVisita = vendedor.cantidadVisitas > 0 ? (vendedor.tiempoTotalVisitas / vendedor.cantidadVisitas).toFixed(2) + " min" : "0.00 min";
+
+                    // 🔹 Corrección: Clientes únicos sin duplicados
+                    const clientesUnicos = new Set([...vendedor.Clientes_Con_Venta, ...vendedor.Clientes_Sin_Venta]).size;
 
                     return {
                         Vendedor: vendedor.Vendedor,
@@ -142,12 +143,10 @@ const ExcelReader = () => {
                         "Total Fuera de Ruta": "$" + vendedor.fueraDeRuta.toFixed(2),
                         "Clientes con Venta": vendedor.Clientes_Con_Venta.size,
                         "Clientes sin Venta": vendedor.Clientes_Sin_Venta.size,
-                        "Clientes Duplicados": vendedor.Clientes_Duplicados.size,
-                        "Clientes Efectivos": vendedor.Clientes_Efectivos.size,
                         "Conteo Fuera de Ruta": vendedor.countFueraRuta,
-                        "Efectividad de Visitas": esEspejo || (planificados > 0 ? ((vendedor.Clientes_Efectivos.size / planificados) * 100).toFixed(2) + "%" : "S/P"),
                         "Efectividad de Ventas": esEspejo || (planificados > 0 ? ((vendedor.Clientes_Con_Venta.size / planificados) * 100).toFixed(2) + "%" : "S/P"),
-                        "Cumplimiento de Ruta": esEspejo || (planificados > 0 ? (((vendedor.Clientes_Con_Venta.size + vendedor.Clientes_Sin_Venta.size) / planificados) * 100).toFixed(2) + "%" : "S/P"),
+                        "Cumplimiento de Ruta": esEspejo || (planificados > 0 ?
+                            ((clientesUnicos / planificados) * 100).toFixed(2) + "%" : "S/P"),
                         "Ticket Promedio": esEspejo || "$" + (vendedor.Clientes_Con_Venta.size > 0 ? (vendedor.totalVentas / vendedor.Clientes_Con_Venta.size).toFixed(2) : "0.00"),
                         "Tiempo Promedio de Visita": tiempoPromedioVisita
                     };
@@ -160,6 +159,7 @@ const ExcelReader = () => {
             }
         };
     };
+
     const exportToExcel = () => {
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
