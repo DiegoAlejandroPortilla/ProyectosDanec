@@ -10,14 +10,6 @@ const ExcelReader = () => {
         setFile(event.target.files[0]);
     };
 
-    const parseTime = (excelTime) => {
-        if (!excelTime) return "";
-        if (typeof excelTime === "string") return excelTime;
-
-        const date = XLSX.SSF.parse_date_code(excelTime);
-        return [date.H, date.M, date.S].map(n => n.toString().padStart(2, "0")).join(":");
-    };
-
     const timeToMinutes = (time) => {
         if (!time) return 0;
         const [hours, minutes, seconds] = time.split(":").map(Number);
@@ -47,8 +39,9 @@ const ExcelReader = () => {
 
                 const vendedores = {};
 
-                jsonData.forEach(({ Vendedor, razon, Tipo, programado, distancia, hora_inicio, hora_fin, Clientes_Programados, Total }) => {
+                jsonData.forEach(({ Vendedor, razon, Tipo, programado, Clientes_Programados, Total, hora_inicio, hora_fin }) => {
                     if (!Vendedor) return;
+
                     const key = Vendedor;
                     const clientKey = `${Vendedor}_${razon}`;
 
@@ -56,53 +49,46 @@ const ExcelReader = () => {
                         vendedores[key] = {
                             Vendedor,
                             planificados: parseInt(Clientes_Programados) || 0,
-                            hora_inicio: null,
-                            hora_final: null,
                             totalVentas: 0,
-                            fueraDeRuta: 0,
-                            countFueraRuta: 0,
+                            totalFueraDeRuta: 0,
+                            cantidadFueraDeRuta: 0,
                             Clientes_Con_Venta: new Set(),
                             Clientes_Sin_Venta: new Set(),
                             clientesProcesados: new Map(),
+                            hora_inicio: null,
+                            hora_final: null,
                             tiempoTotalVisitas: 0,
-                            cantidadVisitas: 0,
+                            cantidadVisitas: 0
                         };
-                    }
-
-                    const parsedHoraInicio = parseTime(hora_inicio);
-                    const parsedHoraFin = parseTime(hora_fin);
-
-                    if (parsedHoraInicio) {
-                        if (!vendedores[key].hora_inicio || parsedHoraInicio < vendedores[key].hora_inicio) {
-                            vendedores[key].hora_inicio = parsedHoraInicio;
-                        }
-                    }
-
-                    if (parsedHoraFin) {
-                        if (!vendedores[key].hora_final || parsedHoraFin > vendedores[key].hora_final) {
-                            vendedores[key].hora_final = parsedHoraFin;
-                        }
                     }
 
                     vendedores[key].totalVentas += parseFloat(Total) || 0;
 
                     if (programado === "FUERA DE RUTA") {
-                        vendedores[key].fueraDeRuta += parseFloat(Total) || 0;
-                        vendedores[key].countFueraRuta += 1;
+                        vendedores[key].totalFueraDeRuta += parseFloat(Total) || 0;
+                        vendedores[key].cantidadFueraDeRuta += 1;
+                        return;
                     }
 
                     if (!vendedores[key].clientesProcesados.has(clientKey)) {
-                        vendedores[key].clientesProcesados.set(clientKey, { tipos: new Set(), distancia: parseFloat(distancia) || 0 });
+                        vendedores[key].clientesProcesados.set(clientKey, new Set());
+                    }
+                    
+                    vendedores[key].clientesProcesados.get(clientKey).add(Tipo);
+
+                    if (hora_inicio && (!vendedores[key].hora_inicio || hora_inicio < vendedores[key].hora_inicio)) {
+                        vendedores[key].hora_inicio = hora_inicio;
+                    }
+                    
+                    if (hora_fin && (!vendedores[key].hora_final || hora_fin > vendedores[key].hora_final)) {
+                        vendedores[key].hora_final = hora_fin;
                     }
 
-                    vendedores[key].clientesProcesados.get(clientKey).tipos.add(Tipo);
-
-                    // Calcular tiempo de visita solo para "03-Pedido Contado"
-                    if (Tipo === "03-Pedido Contado" && parsedHoraInicio && parsedHoraFin) {
-                        const minutosInicio = timeToMinutes(parsedHoraInicio);
-                        const minutosFin = timeToMinutes(parsedHoraFin);
+                    if ((Tipo === "03-Pedido Contado" || Tipo === "01-Pedido CREDITO o CPP") && hora_inicio && hora_fin) {
+                        const minutosInicio = timeToMinutes(hora_inicio);
+                        const minutosFin = timeToMinutes(hora_fin);
                         const duracionVisita = minutosFin - minutosInicio;
-
+                        
                         if (duracionVisita > 0) {
                             vendedores[key].tiempoTotalVisitas += duracionVisita;
                             vendedores[key].cantidadVisitas += 1;
@@ -110,45 +96,38 @@ const ExcelReader = () => {
                     }
                 });
 
-                // Ajuste para evitar clientes duplicados en las métricas
                 Object.values(vendedores).forEach(vendedor => {
-                    vendedor.clientesProcesados.forEach(({ tipos }, cliente) => {
-                        if (tipos.has("03-Pedido Contado")) {
+                    vendedor.clientesProcesados.forEach((tipos, cliente) => {
+                        if (tipos.has("03-Pedido Contado") || tipos.has("01-Pedido CREDITO o CPP")) {
                             vendedor.Clientes_Con_Venta.add(cliente);
-                            vendedor.Clientes_Sin_Venta.delete(cliente); // Si compró, se elimina de "sin venta"
-                        } else if (tipos.has("00-Registro de Visita")) {
-                            if (!vendedor.Clientes_Con_Venta.has(cliente)) { // Solo lo agregamos si NO compró
-                                vendedor.Clientes_Sin_Venta.add(cliente);
-                            }
+                        } else if (tipos.has("00-Registro de Visita") || tipos.has("20-Cambio de producto")) {
+                            vendedor.Clientes_Sin_Venta.add(cliente);
                         }
                     });
                 });
 
-
-                // Ajuste en el cálculo de Cumplimiento de Ruta (solo clientes únicos)
                 const processedData = Object.values(vendedores).map((vendedor) => {
-                    const planificados = vendedor.planificados || "Sin clientes Planificados";
-                    const esEspejo = vendedor.Vendedor.endsWith("1") ? "ESPEJO" : null;
+                    const ticketPromedio = vendedor.Clientes_Con_Venta.size > 0 ? (vendedor.totalVentas / vendedor.Clientes_Con_Venta.size).toFixed(2) : "0.00";
+                    const efectividadVisitas = vendedor.planificados > 0 ? ((vendedor.Clientes_Con_Venta.size / vendedor.planificados) * 100).toFixed(2) + "%" : "S/P";
+                    const efectividadVentas = vendedor.Clientes_Con_Venta.size > 0 ? ((vendedor.Clientes_Con_Venta.size / (vendedor.Clientes_Con_Venta.size + vendedor.Clientes_Sin_Venta.size)) * 100).toFixed(2) + "%" : "S/P";
+                    const cumplimientoRuta = vendedor.planificados > 0 ? (((vendedor.Clientes_Con_Venta.size + vendedor.Clientes_Sin_Venta.size) / vendedor.planificados) * 100).toFixed(2) + "%" : "S/P";
                     const tiempoPromedioVisita = vendedor.cantidadVisitas > 0 ? (vendedor.tiempoTotalVisitas / vendedor.cantidadVisitas).toFixed(2) + " min" : "0.00 min";
-
-                    // 🔹 Corrección: Clientes únicos sin duplicados
-                    const clientesUnicos = new Set([...vendedor.Clientes_Con_Venta, ...vendedor.Clientes_Sin_Venta]).size;
-
+                    
                     return {
                         Vendedor: vendedor.Vendedor,
-                        planificados,
-                        hora_inicio: vendedor.hora_inicio || "Sin registro",
-                        hora_final: vendedor.hora_final || "Sin registro",
+                        planificados: vendedor.planificados,
                         "Valor Total": "$" + vendedor.totalVentas.toFixed(2),
-                        "Total Fuera de Ruta": "$" + vendedor.fueraDeRuta.toFixed(2),
+                        "Valor Total FUERA DE RUTA": "$" + vendedor.totalFueraDeRuta.toFixed(2),
+                        "Cantidad FUERA DE RUTA": vendedor.cantidadFueraDeRuta,
                         "Clientes con Venta": vendedor.Clientes_Con_Venta.size,
                         "Clientes sin Venta": vendedor.Clientes_Sin_Venta.size,
-                        "Conteo Fuera de Ruta": vendedor.countFueraRuta,
-                        "Efectividad de Ventas": esEspejo || (planificados > 0 ? ((vendedor.Clientes_Con_Venta.size / planificados) * 100).toFixed(2) + "%" : "S/P"),
-                        "Cumplimiento de Ruta": esEspejo || (planificados > 0 ?
-                            ((clientesUnicos / planificados) * 100).toFixed(2) + "%" : "S/P"),
-                        "Ticket Promedio": esEspejo || "$" + (vendedor.Clientes_Con_Venta.size > 0 ? (vendedor.totalVentas / vendedor.Clientes_Con_Venta.size).toFixed(2) : "0.00"),
-                        "Tiempo Promedio de Visita": tiempoPromedioVisita
+                        "Hora Inicio": vendedor.hora_inicio || "Sin registro",
+                        "Hora Fin": vendedor.hora_final || "Sin registro",
+                        "Ticket Promedio": "$" + ticketPromedio,
+                        "Efectividad de Visitas": efectividadVisitas,
+                        "Efectividad de Ventas": efectividadVentas,
+                        "Cumplimiento de Ruta": cumplimientoRuta,
+                        "Tiempo Promedio Visita": tiempoPromedioVisita
                     };
                 });
 
@@ -159,14 +138,12 @@ const ExcelReader = () => {
             }
         };
     };
-
     const exportToExcel = () => {
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Vendedores");
         XLSX.writeFile(wb, "Reporte_Vendedores.xlsx");
     };
-
 
     return (
         <div>
