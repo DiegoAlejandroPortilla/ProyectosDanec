@@ -6,6 +6,7 @@ import AnotherTransformation from "./AnotherTransformation";
 import CuadreCartera from "./CuadreCartera";
 import GestionVendedores from "./GestionVendedores";
 import "./App.css"; // Asegúrate de que los estilos estén aquí
+import BotCartera from "./BotCartera";
 
 function App() {
   const [tabIndex, setTabIndex] = useState(0);
@@ -19,6 +20,7 @@ function App() {
     if (tabIndex === 1) return <AnotherTransformation />;
     //if (tabIndex === 2) return <CuadreCartera />;
     if (tabIndex === 2) return <GestionVendedores />;
+    if (tabIndex === 3) return <BotCartera />;
     return null;
   };
 
@@ -35,6 +37,7 @@ function App() {
           <Tab label="Cartera  " />
           
           <Tab label="Extracción Datos Vendedor  " />
+          <Tab label="Bot Cartera" />
         </Tabs>
       </Box>
       <TransitionGroup component={null}>

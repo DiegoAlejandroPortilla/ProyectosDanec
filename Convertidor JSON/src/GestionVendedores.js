@@ -1,12 +1,10 @@
 import React, { useState } from "react";
 import * as XLSX from "xlsx";
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Typography, TextField, Grid } from "@mui/material";
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Grid } from "@mui/material";
 
 const ExcelReader = () => {
     const [file, setFile] = useState(null);
     const [data, setData] = useState([]);
-    const [search, setSearch] = useState("");
-    const [duplicatesCount, setDuplicatesCount] = useState(0);
 
     const handleFileUpload = (event) => {
         setFile(event.target.files[0]);
@@ -17,14 +15,13 @@ const ExcelReader = () => {
         if (typeof excelTime === "string") return excelTime;
 
         const date = XLSX.SSF.parse_date_code(excelTime);
-        return `${date.H.toString().padStart(2, "0")}:${date.M.toString().padStart(2, "0")}:${date.S.toString().padStart(2, "0")}`;
+        return [date.H, date.M, date.S].map(n => n.toString().padStart(2, "0")).join(":");
     };
 
-    const getColorForTime = (time, type) => {
-        const [hours, minutes] = time.split(":").map(Number);
-        if (type === "inicio" && hours >= 9) return "red"; // Si la hora de inicio es mayor o igual a las 9:00, pintarlo de rojo
-        if (type === "final" && hours < 15) return "red"; // Si la hora final es menor a las 15:00, pintarlo de rojo
-        return "initial"; // Si no, el color es el predeterminado
+    const timeToMinutes = (time) => {
+        if (!time) return 0;
+        const [hours, minutes, seconds] = time.split(":").map(Number);
+        return hours * 60 + minutes + seconds / 60;
     };
 
     const handleProcessFile = () => {
@@ -39,15 +36,9 @@ const ExcelReader = () => {
         reader.onload = (e) => {
             try {
                 const workbook = XLSX.read(e.target.result, { type: "binary" });
-
-                if (workbook.SheetNames.length === 0) {
-                    alert("El archivo Excel está vacío.");
-                    return;
-                }
-
                 const sheetName = workbook.SheetNames[0];
                 const sheet = workbook.Sheets[sheetName];
-                const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: 0 });
+                const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
                 if (jsonData.length === 0) {
                     alert("No se encontraron datos en la hoja seleccionada.");
@@ -55,76 +46,111 @@ const ExcelReader = () => {
                 }
 
                 const vendedores = {};
-                const seenDescricion = new Map();
-                let duplicateCounter = 0;
 
-                jsonData.forEach(({ nom_nombre, inicio, final, Total, Programado, Descricion }) => {
-                    if (!nom_nombre) return;
-                    const horaInicio = parseTime(inicio);
-                    const horaFinal = parseTime(final);
-                    const venta = parseFloat(Total) || 0;
-                    const key = nom_nombre;
-                    const uniqueKey = `${nom_nombre}_${Descricion}`;
+                jsonData.forEach(({ Vendedor, razon, Tipo, programado, distancia, hora_inicio, hora_fin, Clientes_Programados, Total }) => {
+                    if (!Vendedor) return;
+                    const key = Vendedor;
+                    const clientKey = `${Vendedor}_${razon}`;
 
                     if (!vendedores[key]) {
-                        vendedores[key] = { 
-                            nom_nombre, 
-                            inicio: horaInicio, 
-                            final: horaFinal, 
-                            totalVentas: 0, 
-                            fueraDeRuta: 0, 
-                            countDuplicados: 0, 
-                            countProgramadoTotal0: 0, 
-                            countProgramadoTotalMayor0: 0, 
-                            countFueraRuta: 0, 
+                        vendedores[key] = {
+                            Vendedor,
+                            planificados: parseInt(Clientes_Programados) || 0,
+                            hora_inicio: null,
+                            hora_final: null,
+                            totalVentas: 0,
+                            fueraDeRuta: 0,
+                            countFueraRuta: 0,
+                            Clientes_Con_Venta: new Set(),
+                            Clientes_Sin_Venta: new Set(),
+                            clientesProcesados: new Map(),
+                            tiempoTotalVisitas: 0,
+                            cantidadVisitas: 0,
                         };
                     }
 
-                    vendedores[key].inicio = vendedores[key].inicio < horaInicio ? vendedores[key].inicio : horaInicio;
-                    vendedores[key].final = vendedores[key].final > horaFinal ? vendedores[key].final : horaFinal;
-                    vendedores[key].totalVentas += venta;
+                    const parsedHoraInicio = parseTime(hora_inicio);
+                    const parsedHoraFin = parseTime(hora_fin);
 
-                    if (seenDescricion.has(uniqueKey)) {
-                        let existingData = seenDescricion.get(uniqueKey);
-                        if (existingData.total === 0 && venta > 0) {
-                            seenDescricion.set(uniqueKey, { total: venta });
-                        } else if (existingData.total === venta) {
-                            vendedores[key].countDuplicados += 1;
-                            duplicateCounter += 1;
-                        }
-                    } else {
-                        seenDescricion.set(uniqueKey, { total: venta });
-
-                        if (venta === 0) {
-                            vendedores[key].countProgramadoTotal0 += 1;
-                        } else {
-                            vendedores[key].countProgramadoTotalMayor0 += 1;
+                    if (parsedHoraInicio) {
+                        if (!vendedores[key].hora_inicio || parsedHoraInicio < vendedores[key].hora_inicio) {
+                            vendedores[key].hora_inicio = parsedHoraInicio;
                         }
                     }
 
-                    if (Programado === "FUERA DE RUTA") {
-                        vendedores[key].fueraDeRuta += venta;
+                    if (parsedHoraFin) {
+                        if (!vendedores[key].hora_final || parsedHoraFin > vendedores[key].hora_final) {
+                            vendedores[key].hora_final = parsedHoraFin;
+                        }
+                    }
+
+                    vendedores[key].totalVentas += parseFloat(Total) || 0;
+
+                    if (programado === "FUERA DE RUTA") {
+                        vendedores[key].fueraDeRuta += parseFloat(Total) || 0;
                         vendedores[key].countFueraRuta += 1;
+                    }
+
+                    if (!vendedores[key].clientesProcesados.has(clientKey)) {
+                        vendedores[key].clientesProcesados.set(clientKey, { tipos: new Set(), distancia: parseFloat(distancia) || 0 });
+                    }
+
+                    vendedores[key].clientesProcesados.get(clientKey).tipos.add(Tipo);
+
+                    // Calcular tiempo de visita solo para "03-Pedido Contado"
+                    if (Tipo === "03-Pedido Contado" && parsedHoraInicio && parsedHoraFin) {
+                        const minutosInicio = timeToMinutes(parsedHoraInicio);
+                        const minutosFin = timeToMinutes(parsedHoraFin);
+                        const duracionVisita = minutosFin - minutosInicio;
+
+                        if (duracionVisita > 0) {
+                            vendedores[key].tiempoTotalVisitas += duracionVisita;
+                            vendedores[key].cantidadVisitas += 1;
+                        }
                     }
                 });
 
-                setDuplicatesCount(duplicateCounter);
+                // Ajuste para evitar clientes duplicados en las métricas
+                Object.values(vendedores).forEach(vendedor => {
+                    vendedor.clientesProcesados.forEach(({ tipos }, cliente) => {
+                        if (tipos.has("03-Pedido Contado")) {
+                            vendedor.Clientes_Con_Venta.add(cliente);
+                            vendedor.Clientes_Sin_Venta.delete(cliente); // Si compró, se elimina de "sin venta"
+                        } else if (tipos.has("00-Registro de Visita")) {
+                            if (!vendedor.Clientes_Con_Venta.has(cliente)) { // Solo lo agregamos si NO compró
+                                vendedor.Clientes_Sin_Venta.add(cliente);
+                            }
+                        }
+                    });
+                });
 
-                if (duplicateCounter > 0) {
-                    alert("Se encontraron registros duplicados.");
-                }
 
-                const processedData = Object.values(vendedores).map((vendedor) => ({
-                    nom_nombre: vendedor.nom_nombre,
-                    inicio: vendedor.inicio,
-                    final: vendedor.final,
-                    "Valor Total": vendedor.totalVentas.toFixed(2),
-                    "Total Fuera de Ruta": vendedor.fueraDeRuta.toFixed(2),
-                    "Cantidad Duplicados": vendedor.countDuplicados,
-                    "Conteo Programado (Total = 0)": vendedor.countProgramadoTotal0,
-                    "Conteo Programado (Total > 0)": vendedor.countProgramadoTotalMayor0,
-                    "Conteo Fuera de Ruta": vendedor.countFueraRuta
-                }));
+                // Ajuste en el cálculo de Cumplimiento de Ruta (solo clientes únicos)
+                const processedData = Object.values(vendedores).map((vendedor) => {
+                    const planificados = vendedor.planificados || "Sin clientes Planificados";
+                    const esEspejo = vendedor.Vendedor.endsWith("1") ? "ESPEJO" : null;
+                    const tiempoPromedioVisita = vendedor.cantidadVisitas > 0 ? (vendedor.tiempoTotalVisitas / vendedor.cantidadVisitas).toFixed(2) + " min" : "0.00 min";
+
+                    // 🔹 Corrección: Clientes únicos sin duplicados
+                    const clientesUnicos = new Set([...vendedor.Clientes_Con_Venta, ...vendedor.Clientes_Sin_Venta]).size;
+
+                    return {
+                        Vendedor: vendedor.Vendedor,
+                        planificados,
+                        hora_inicio: vendedor.hora_inicio || "Sin registro",
+                        hora_final: vendedor.hora_final || "Sin registro",
+                        "Valor Total": "$" + vendedor.totalVentas.toFixed(2),
+                        "Total Fuera de Ruta": "$" + vendedor.fueraDeRuta.toFixed(2),
+                        "Clientes con Venta": vendedor.Clientes_Con_Venta.size,
+                        "Clientes sin Venta": vendedor.Clientes_Sin_Venta.size,
+                        "Conteo Fuera de Ruta": vendedor.countFueraRuta,
+                        "Efectividad de Ventas": esEspejo || (planificados > 0 ? ((vendedor.Clientes_Con_Venta.size / planificados) * 100).toFixed(2) + "%" : "S/P"),
+                        "Cumplimiento de Ruta": esEspejo || (planificados > 0 ?
+                            ((clientesUnicos / planificados) * 100).toFixed(2) + "%" : "S/P"),
+                        "Ticket Promedio": esEspejo || "$" + (vendedor.Clientes_Con_Venta.size > 0 ? (vendedor.totalVentas / vendedor.Clientes_Con_Venta.size).toFixed(2) : "0.00"),
+                        "Tiempo Promedio de Visita": tiempoPromedioVisita
+                    };
+                });
 
                 setData(processedData);
             } catch (error) {
@@ -134,14 +160,13 @@ const ExcelReader = () => {
         };
     };
 
-    const handleExportToExcel = () => {
+    const exportToExcel = () => {
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Datos Procesados");
-
-        // Generar archivo Excel y descargarlo
-        XLSX.writeFile(wb, "datos_procesados.xlsx");
+        XLSX.utils.book_append_sheet(wb, ws, "Vendedores");
+        XLSX.writeFile(wb, "Reporte_Vendedores.xlsx");
     };
+
 
     return (
         <div>
@@ -155,43 +180,25 @@ const ExcelReader = () => {
                     </Button>
                 </Grid>
                 <Grid item>
-                    <Button variant="contained" color="secondary" fullWidth onClick={handleExportToExcel}>
-                        Descargar Excel
+                    <Button variant="contained" color="secondary" fullWidth onClick={exportToExcel} disabled={data.length === 0}>
+                        Exportar a Excel
                     </Button>
                 </Grid>
-                <Grid item>
-                    <TextField label="Buscar" variant="outlined" fullWidth margin="normal" value={search} onChange={(e) => setSearch(e.target.value)} />
-                </Grid>
-                <Typography variant="h6" color={duplicatesCount > 0 ? "error" : "initial"}>
-                    Duplicados encontrados: {duplicatesCount}
-                </Typography>
                 <TableContainer component={Paper}>
                     <Table>
                         <TableHead>
                             <TableRow>
-                                <TableCell>Nombre</TableCell>
-                                <TableCell>Inicio</TableCell>
-                                <TableCell>Final</TableCell>
-                                <TableCell>Valor Total</TableCell>
-                                <TableCell>Total Fuera de Ruta</TableCell>
-                                <TableCell>Cantidad Duplicados</TableCell>
-                                <TableCell>Conteo Programado (Total = 0)</TableCell>
-                                <TableCell>Conteo Programado (Total > 0)</TableCell>
-                                <TableCell>Conteo Fuera de Ruta</TableCell>
+                                {Object.keys(data[0] || {}).map((key, index) => (
+                                    <TableCell key={index}>{key}</TableCell>
+                                ))}
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {data.filter(row => row.nom_nombre.toLowerCase().includes(search.toLowerCase())).map((row, index) => (
+                            {data.map((row, index) => (
                                 <TableRow key={index}>
-                                    <TableCell>{row.nom_nombre}</TableCell>
-                                    <TableCell style={{ color: getColorForTime(row.inicio, "inicio") }}>{row.inicio}</TableCell>
-                                    <TableCell style={{ color: getColorForTime(row.final, "final") }}>{row.final}</TableCell>
-                                    <TableCell>${row["Valor Total"]}</TableCell>
-                                    <TableCell>${row["Total Fuera de Ruta"]}</TableCell>
-                                    <TableCell>{row["Cantidad Duplicados"]}</TableCell>
-                                    <TableCell>{row["Conteo Programado (Total = 0)"]}</TableCell>
-                                    <TableCell>{row["Conteo Programado (Total > 0)"]}</TableCell>
-                                    <TableCell>{row["Conteo Fuera de Ruta"]}</TableCell>
+                                    {Object.values(row).map((value, i) => (
+                                        <TableCell key={i}>{value}</TableCell>
+                                    ))}
                                 </TableRow>
                             ))}
                         </TableBody>
