@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import * as XLSX from "xlsx";
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Grid, TextField } from "@mui/material";
-
+import {
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
+    Button, Grid, TextField, Tooltip
+} from "@mui/material";
 const ExcelReader = () => {
     const [file, setFile] = useState(null);
     const [data, setData] = useState([]);
@@ -131,25 +133,14 @@ const ExcelReader = () => {
                         : "S/P";
                 });
 
-                const processedData = Object.values(vendedores).map((vendedor) => {
-                    return {
-                        Vendedor: vendedor.Vendedor,
-                        planificados: vendedor.planificados,
-                        "Valor Total": "$" + vendedor.totalVentas.toFixed(2),
-                        "Valor Total FUERA DE RUTA": "$" + vendedor.totalFueraDeRuta.toFixed(2),
-                        "Cantidad FUERA DE RUTA": vendedor.cantidadFueraDeRuta,
-                        "Clientes con Venta": vendedor.Clientes_Con_Venta.size,
-                        "Clientes sin Venta": vendedor.Clientes_Sin_Venta.size,
-                        "Hora Inicio": vendedor.hora_inicio || "Sin registro",
-                        "Hora Fin": vendedor.hora_final || "Sin registro",
-                        "Ticket Promedio": "$" + (vendedor.Clientes_Con_Venta.size > 0 
-                            ? (vendedor.totalVentas / vendedor.Clientes_Con_Venta.size).toFixed(2) 
-                            : "0.00"),
-                        "Efectividad de Visitas": vendedor.efectividadVisitas,
-                        "Cumplimiento de Ruta": vendedor.cumplimientoRuta, // ✅ Agregado correctamente
-                        "Registros Efectividad": vendedor.registrosEfectividad.size
-                    };
-                });
+                const processedData = Object.values(vendedores).map(vendedor => ({
+                    ...vendedor,
+                    efectividadVisitas: vendedor.planificados > 0 ? ((vendedor.Clientes_Con_Venta.size / vendedor.planificados) * 100).toFixed(2) + "%" : "S/P",
+                    cumplimientoRuta: vendedor.planificados > 0 ? (Math.min(((vendedor.Clientes_Con_Venta.size + vendedor.Clientes_Sin_Venta.size) / vendedor.planificados) * 100, 100)).toFixed(2) + "%" : "S/P",
+                    ticketPromedio: vendedor.Clientes_Con_Venta.size > 0 ? "$" + (vendedor.totalVentas / vendedor.Clientes_Con_Venta.size).toFixed(2) : "$0.00",
+                    tiempoPromedioVisitas: vendedor.cantidadVisitas > 0 ? (vendedor.tiempoTotalVisitas / vendedor.cantidadVisitas).toFixed(2) + " min" : "N/A",
+                    valorTotalFueraRuta: "$" + vendedor.totalFueraDeRuta.toFixed(2)
+                }));
 
                 setData(processedData);
             } catch (error) {
@@ -162,59 +153,69 @@ const ExcelReader = () => {
     const filteredData = data.filter(row => row.Vendedor.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const exportToExcel = () => {
-        const ws = XLSX.utils.json_to_sheet(data);
+        const ws = XLSX.utils.json_to_sheet(data.map(row => ({
+            Vendedor: row.Vendedor,
+            Planificados: row.planificados,
+            "Valor Total": row.totalVentas,
+            "Valor Total FUERA DE RUTA": row.valorTotalFueraRuta,
+            "Hora Inicio": row.hora_inicio || "Sin registro",
+            "Hora Fin": row.hora_final || "Sin registro",
+            "Efectividad Visitas": row.efectividadVisitas,
+            "Cumplimiento Ruta": row.cumplimientoRuta,
+            "Ticket Promedio": row.ticketPromedio,
+            "Tiempo Promedio Visitas": row.tiempoPromedioVisitas,
+            "Clientes con Venta": row.Clientes_Con_Venta.size,
+            "Clientes sin Venta": row.Clientes_Sin_Venta.size,
+            "Cantidad FUERA DE RUTA": row.cantidadFueraDeRuta,
+            "Registros Efectividad": row.registrosEfectividad.size
+        })));
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Vendedores");
+        XLSX.utils.book_append_sheet(wb, ws, "Reporte");
         XLSX.writeFile(wb, "Reporte_Vendedores.xlsx");
     };
 
+
     return (
         <div>
-            <Grid container spacing={2} direction="column" alignItems="stretch">
-                <Grid item>
-                    <input type="file" accept=".xls,.xlsx" onChange={handleFileUpload} style={{ width: "100%" }} />
-                </Grid>
-                <Grid item>
-                    <Button variant="contained" color="primary" fullWidth onClick={handleProcessFile}>
-                        Procesar Archivo
-                    </Button>
-                </Grid>
-
-                <Grid item>
-                    <Button variant="contained" color="secondary" fullWidth onClick={exportToExcel} disabled={data.length === 0}>
-                        Exportar a Excel
-                    </Button>
-                </Grid>
-                <Grid item>
-                    <TextField
-                        fullWidth
-                        label="Buscar por Vendedor"
-                        variant="outlined"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </Grid>
-                <TableContainer component={Paper}>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                {Object.keys(filteredData[0] || {}).map((key, index) => (
-                                    <TableCell key={index}>{key}</TableCell>
-                                ))}
+            <input type="file" accept=".xls,.xlsx" onChange={handleFileUpload} />
+            <Button variant="contained" color="primary" onClick={handleProcessFile}>Procesar Archivo</Button>
+            <Button variant="contained" color="secondary" onClick={exportToExcel} disabled={data.length === 0}>Exportar a Excel</Button>
+            <TableContainer component={Paper}>
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            <TableCell>Vendedor</TableCell>
+                            <TableCell>Planificados</TableCell>
+                            <TableCell>Valor Total</TableCell>
+                            <TableCell>Valor Total FUERA DE RUTA</TableCell>
+                            <TableCell>Hora Inicio</TableCell>
+                            <TableCell>Hora Fin</TableCell>
+                            <TableCell>Efectividad Visitas</TableCell>
+                            <TableCell>Cumplimiento Ruta</TableCell>
+                            <TableCell>Ticket Promedio</TableCell>
+                            <TableCell>Tiempo Promedio Visitas</TableCell>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {data.map((row, index) => (
+                            <TableRow key={index}>
+                                <Tooltip title={`Clientes con Venta: ${row.Clientes_Con_Venta.size} | Clientes sin Venta: ${row.Clientes_Sin_Venta.size} | FUERA DE RUTA: ${row.cantidadFueraDeRuta} | Registros Efectividad: ${row.registrosEfectividad.size}`} arrow>
+                                    <TableCell>{row.Vendedor}</TableCell>
+                                </Tooltip>
+                                <TableCell>{row.planificados}</TableCell>
+                                <TableCell>{"$" + row.totalVentas.toFixed(2)}</TableCell>
+                                <TableCell>{row.valorTotalFueraRuta}</TableCell>
+                                <TableCell>{row.hora_inicio || "Sin registro"}</TableCell>
+                                <TableCell>{row.hora_final || "Sin registro"}</TableCell>
+                                <TableCell>{row.efectividadVisitas}</TableCell>
+                                <TableCell>{row.cumplimientoRuta}</TableCell>
+                                <TableCell>{row.ticketPromedio}</TableCell>
+                                <TableCell>{row.tiempoPromedioVisitas}</TableCell>
                             </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {filteredData.map((row, index) => (
-                                <TableRow key={index}>
-                                    {Object.values(row).map((value, i) => (
-                                        <TableCell key={i}>{value}</TableCell>
-                                    ))}
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
-            </Grid>
+                        ))}
+                    </TableBody>
+                </Table>
+            </TableContainer>
         </div>
     );
 };
