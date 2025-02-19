@@ -17,10 +17,10 @@ function App() {
 
   const renderContent = () => {
     if (tabIndex === 0) return <ExcelToJsonConverter />;
-    if (tabIndex === 1) return <AnotherTransformation />;
+    if (tabIndex === 1) return <GestionVendedores />;
     //if (tabIndex === 2) return <CuadreCartera />;
-    if (tabIndex === 2) return <GestionVendedores />;
-    if (tabIndex === 3) return <BotCartera />;
+    //if (tabIndex === 2) return <GestionVendedores />;
+    //if (tabIndex === 3) return <BotCartera />;
     return null;
   };
 
@@ -34,10 +34,10 @@ function App() {
       >
         <Tabs value={tabIndex} onChange={handleTabChange}>
           <Tab label="Embarques" />
-          <Tab label="Cartera  " />
+          
           
           <Tab label="Extracción Datos Vendedor  " />
-          <Tab label="Bot Cartera" />
+          
         </Tabs>
       </Box>
       <TransitionGroup component={null}>
