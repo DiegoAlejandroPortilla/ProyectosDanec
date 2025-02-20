@@ -4,6 +4,7 @@ import { CSSTransition, TransitionGroup } from "react-transition-group";
 import ExcelToJsonConverter from "./ExcelToJsonConverter";
 import AnotherTransformation from "./AnotherTransformation";
 import CuadreCartera from "./CuadreCartera";
+import Grafics from "./Grafics";
 import GestionVendedores from "./GestionVendedores";
 import "./App.css"; // Asegúrate de que los estilos estén aquí
 import BotCartera from "./BotCartera";
@@ -18,6 +19,7 @@ function App() {
   const renderContent = () => {
     if (tabIndex === 0) return <ExcelToJsonConverter />;
     if (tabIndex === 1) return <GestionVendedores />;
+    if (tabIndex === 2) return <Grafics />;
     //if (tabIndex === 2) return <CuadreCartera />;
     //if (tabIndex === 2) return <GestionVendedores />;
     //if (tabIndex === 3) return <BotCartera />;
@@ -37,6 +39,7 @@ function App() {
           
           
           <Tab label="Extracción Datos Vendedor  " />
+          <Tab label="Gráficas" />
           
         </Tabs>
       </Box>
