@@ -1,0 +1,17 @@
+/* Animación para la gráfica */
+.grafica-container {
+    transition: all 0.3s ease-in-out; /* Transición suave */
+  }
+  
+  /* Cuando la gráfica está maximizada */
+  .grafica-maximizada {
+    width: 100% !important; /* Ocupa todo el ancho */
+  }
+  
+  /* Cuando la gráfica está minimizada */
+  .grafica-minimizada {
+    width: 50% !important; /* Ocupa la mitad del ancho */
+    opacity: 0; /* Oculta la gráfica */
+    height: 0; /* Reduce la altura a 0 */
+    overflow: hidden; /* Evita que el contenido se desborde */
+  }

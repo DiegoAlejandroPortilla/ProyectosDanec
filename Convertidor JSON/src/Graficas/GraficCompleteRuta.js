@@ -41,7 +41,7 @@ const GraficaCompleteRuta = () => {
                             formattedData.push({
                                 Fecha: fecha.getTime(), // Convertir a timestamp numérico
                                 FechaStr: format(fecha, "yyyy-MM-dd"), // Guardar fecha formateada para tooltip
-                                Vendedor: entry["Vendedor "] || "Desconocido",
+                                Vendedor: entry["Ruta "] || "Desconocido",
                                 Lider: entry.LIDER || "Sin líder",
                                 Agencia: agencia,
                                 Cumplimiento: parseFloat(entry["Porcentaje de Cumplimiento de Ruta"].replace("%", "")),
@@ -53,7 +53,6 @@ const GraficaCompleteRuta = () => {
         });
         return formattedData.sort((a, b) => a.Fecha - b.Fecha); // Ordenar cronológicamente
     };
-
 
     useEffect(() => {
         const filtered = firebaseData.filter((item) => {
@@ -78,13 +77,12 @@ const GraficaCompleteRuta = () => {
     const colores = ["#3b82f6", "#f87171", "#34d399", "#facc15", "#a78bfa", "#fb923c", "#22d3ee", "#f472b6"];
 
     return (
-        <Card sx={{ p: 3 }}>
+        <Card sx={{ p: { xs: 1, sm: 3 }, maxWidth: '100%' }}>
             <CardContent>
-
                 {/* Filtros */}
-                <Grid container spacing={2} className="grafica-filtros">
-                    <Grid item>
-                        <FormControl sx={{ minWidth: 120 }}>
+                <Grid container spacing={2} className="grafica-filtros" direction={{ xs: 'column', sm: 'row' }}>
+                    <Grid item xs={12} sm={6} md={3}>
+                        <FormControl fullWidth>
                             <InputLabel>Agencia</InputLabel>
                             <Select value={selectedAgencia} onChange={(e) => setSelectedAgencia(e.target.value)}>
                                 <MenuItem value="">Todas</MenuItem>
@@ -95,8 +93,8 @@ const GraficaCompleteRuta = () => {
                         </FormControl>
                     </Grid>
                     {selectedAgencia && (
-                        <Grid item>
-                            <FormControl sx={{ minWidth: 120 }}>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <FormControl fullWidth>
                                 <InputLabel>Líder</InputLabel>
                                 <Select value={selectedLider} onChange={(e) => setSelectedLider(e.target.value)}>
                                     <MenuItem value="">Todos</MenuItem>
@@ -108,9 +106,9 @@ const GraficaCompleteRuta = () => {
                         </Grid>
                     )}
                     {selectedLider && (
-                        <Grid item>
-                            <FormControl sx={{ minWidth: 120 }}>
-                                <InputLabel>Vendedor</InputLabel>
+                        <Grid item xs={12} sm={6} md={3}>
+                            <FormControl fullWidth>
+                                <InputLabel>Ruta</InputLabel>
                                 <Select value={selectedVendedor} onChange={(e) => setSelectedVendedor(e.target.value)}>
                                     <MenuItem value="">Todos</MenuItem>
                                     {[...new Set(firebaseData.filter(d => d.Lider === selectedLider).map((d) => d.Vendedor))].map((vendedor) => (
@@ -120,8 +118,9 @@ const GraficaCompleteRuta = () => {
                             </FormControl>
                         </Grid>
                     )}
-                    <Grid item>
+                    <Grid item xs={12} sm={6} md={3}>
                         <TextField
+                            fullWidth
                             label="Fecha inicio"
                             type="date"
                             InputLabelProps={{ shrink: true }}
@@ -129,8 +128,9 @@ const GraficaCompleteRuta = () => {
                             onChange={(e) => setStartDate(e.target.value)}
                         />
                     </Grid>
-                    <Grid item>
+                    <Grid item xs={12} sm={6} md={3}>
                         <TextField
+                            fullWidth
                             label="Fecha fin"
                             type="date"
                             InputLabelProps={{ shrink: true }}
@@ -140,21 +140,20 @@ const GraficaCompleteRuta = () => {
                     </Grid>
                 </Grid>
 
-                {/* Gráfica (el marco siempre está, pero las líneas solo aparecen si hay agencia seleccionada) */}
-                <ResponsiveContainer width="100%" height={400}>
+                {/* Gráfica */}
+                <ResponsiveContainer width="100%" height={window.innerWidth < 600 ? 300 : 400}>
                     <LineChart
                         data={filteredData}
                         margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
                     >
                         <XAxis
                             dataKey="Fecha"
-                            angle={-45}
+                            angle={window.innerWidth < 600 ? -90 : -45}
                             textAnchor="end"
-                            type="number" // Asegura que se trata como datos numéricos
-                            domain={['dataMin', 'dataMax']} // Ajusta el eje al rango de fechas
+                            type="number"
+                            domain={['dataMin', 'dataMax']}
                             tickFormatter={(tick) => format(new Date(tick), "dd/MM/yyyy")}
                         />
-
                         <YAxis domain={[0, 120]} tickFormatter={(tick) => `${tick}%`} />
                         <Tooltip
                             formatter={(value) => `${value}%`}
@@ -163,16 +162,12 @@ const GraficaCompleteRuta = () => {
                                 return format(fecha, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: es });
                             }}
                         />
-
-
                         <Legend
-                            layout="vertical"
-                            align="right"
-                            verticalAlign="middle"
-                            wrapperStyle={{ fontSize: '10px', marginRight: '-30px' }} // Ajusta el espacio a la izquierda
+                            layout={window.innerWidth < 600 ? 'horizontal' : 'vertical'}
+                            align={window.innerWidth < 600 ? 'center' : 'right'}
+                            verticalAlign={window.innerWidth < 600 ? 'bottom' : 'middle'}
+                            wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
                         />
-
-
                         {/* Renderizar las líneas solo si se ha seleccionado una agencia */}
                         {selectedAgencia &&
                             [...new Set(filteredData.map(d => d.Vendedor))].map((vendedor, index) => (
@@ -190,10 +185,6 @@ const GraficaCompleteRuta = () => {
                         }
                     </LineChart>
                 </ResponsiveContainer>
-
-
-
-
             </CardContent>
         </Card>
     );

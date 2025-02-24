@@ -1,26 +1,25 @@
 import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
-import { format, getISOWeek } from "date-fns";
-import { es } from "date-fns/locale"; // 🌍 Idioma Español
-import DatePicker from "react-datepicker";
+import { format, getISOWeek, parseISO } from "date-fns";
 import "react-datepicker/dist/react-datepicker.css";
 import { database, ref, push, onValue } from "./firebaseConfig";
 import { LabelList, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
-import {
-  Button, Card, CardContent, Typography, Grid, Select, MenuItem, InputLabel, FormControl, TextField
-} from "@mui/material";
-
+import { IconButton, Button, Card, CardContent, Typography, Grid, Select, MenuItem, InputLabel, FormControl, Box, TextField } from "@mui/material";
+import { Add, Remove } from "@mui/icons-material";
 import GraficaCompleteRuta from "./Graficas/GraficCompleteRuta";
-
-
+import GraficVentaDiaria from "./Graficas/GraficVentaDiaria";
+import GraficVentaDiariaLine from "./Graficas/GaficVentaDiariaLine";
+import "./Grafics.css";
+import { motion, AnimatePresence } from "framer-motion";
 const ExcelUploader = () => {
   const [file, setFile] = useState(null);
   const [excelData, setExcelData] = useState({});
   const [firebaseData, setFirebaseData] = useState({});
   const [promediosCalculados, setPromediosCalculados] = useState({});
-  const [liderSeleccionado, setLiderSeleccionado] = useState(""); // 🔹 Nuevo estado para el filtro de líder
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
+  const [maximizedLeft, setMaximizedLeft] = useState(false); // Para la gráfica de la izquierda
+  const [maximizedRight, setMaximizedRight] = useState(false); // Para la gráfica de la derecha
+  const [maximizedVentas, setMaximizedVentas] = useState(false); // Nuevo estado para la gráfica de ventas
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", handleResize);
@@ -185,7 +184,7 @@ const ExcelUploader = () => {
         let data = snapshot.val();
         data = formatRetrievedData(data); // Aplicar formateo de decimales
         setFirebaseData(data);
-        //console.log("🔥 Datos obtenidos desde Firebase:", data);
+        console.log("🔥 Datos obtenidos desde Firebase:", data);
       } else {
         //console.log("⚠️ No hay datos en Firebase.");
       }
@@ -214,7 +213,7 @@ const ExcelUploader = () => {
         let fecha = new Date(registro["Fecha"]);
         let mes = fecha.getFullYear() + "-" + (fecha.getMonth() + 1).toString().padStart(2, "0"); // Formato YYYY-MM
         let semana = fecha.getFullYear() + "-" + getWeekNumber(fecha); // Formato YYYY-WXX
-        let vendedor = registro["Vendedor "].trim();
+        let vendedor = registro["Ruta "].trim();
         let lider = registro["LIDER"] ? registro["LIDER"].trim() : "";
         let porcentaje = parseFloat(registro["Porcentaje de Cumplimiento de Ruta"].replace("%", "")) || 0;
 
@@ -299,15 +298,38 @@ const ExcelUploader = () => {
     const [agenciaSeleccionada, setAgenciaSeleccionada] = useState(Object.keys(data)[0]);
     const [tipoSeleccionado, setTipoSeleccionado] = useState("promedioMensual"); // "promedioMensual" o "promedioSemanal"
     const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
+    const [liderSeleccionado, setLiderSeleccionado] = useState(""); // 🔹 Nuevo estado para el filt
 
     // Se puede ajustar para elegir un periodo específico (en este ejemplo se toma el primer periodo encontrado)
     const obtenerPeriodo = () => {
+      if (!fechaSeleccionada || !(fechaSeleccionada instanceof Date)) {
+        return ""; // Retorna un valor por defecto si la fecha no es válida
+      }
+
       if (tipoSeleccionado === "promedioMensual") {
         return format(fechaSeleccionada, "yyyy-MM"); // Formato: 2025-01
       } else {
         return `${format(fechaSeleccionada, "yyyy")}-${getISOWeek(fechaSeleccionada)}`; // Formato: 2025-W05
       }
     };
+
+    // Obtener los líderes de la agencia seleccionada
+    const obtenerLideresDeAgencia = () => {
+      if (!data[agenciaSeleccionada]) return [];
+      const vendedores = data[agenciaSeleccionada];
+      const lideresUnicos = new Set();
+
+      Object.values(vendedores).forEach((info) => {
+        if (info.lider) {
+          lideresUnicos.add(info.lider);
+        }
+      });
+
+      return Array.from(lideresUnicos);
+    };
+
+    console.log("maximizedVentas:", maximizedVentas);
+    console.log("isMobile:", isMobile);
 
     // Procesar datos para la gráfica: para cada vendedor se extrae el porcentaje del periodo predeterminado
     const procesarDatos = () => {
@@ -316,12 +338,10 @@ const ExcelUploader = () => {
       const vendedores = data[agenciaSeleccionada];
       const periodo = obtenerPeriodo();
 
-      let lideresUnicos = new Set();
       let datosFinales = [];
 
       Object.entries(vendedores).forEach(([vendedor, info]) => {
         const lider = info.lider || "Sin Líder";
-        lideresUnicos.add(lider);
 
         // Si hay un líder seleccionado, solo mostramos sus vendedores
         if (liderSeleccionado === "" || lider === liderSeleccionado) {
@@ -337,131 +357,131 @@ const ExcelUploader = () => {
         }
       });
 
-      return { datos: datosFinales, lideres: Array.from(lideresUnicos) };
+      return { datos: datosFinales };
     };
 
-
     return (
-      <Card sx={{ mt: 3, p: 2 }}>
+      <Card sx={{ mt: 3, p: 2, maxWidth: '100%' }}>
         <CardContent>
-          <Grid container spacing={2} alignItems="center" justifyContent="center">
-            <Grid item>
-              <FormControl sx={{ minWidth: 150 }}>
+          <Grid container spacing={2} alignItems="center" justifyContent="center" direction={{ xs: "column", sm: "row" }}>
+            {/* Selector de Agencia */}
+            <Grid item xs={12} sm={6} md={3}>
+              <FormControl fullWidth>
                 <InputLabel>Agencia</InputLabel>
-                <Select value={agenciaSeleccionada} onChange={(e) => setAgenciaSeleccionada(e.target.value)}>
+                <Select
+                  value={agenciaSeleccionada}
+                  onChange={(e) => {
+                    setAgenciaSeleccionada(e.target.value); // Cambiar la agencia seleccionada
+                    setLiderSeleccionado(""); // Reiniciar el líder seleccionado al cambiar la agencia
+                  }}
+                >
                   {Object.keys(data).map((agencia) => (
                     <MenuItem key={agencia} value={agencia}>{agencia}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
             </Grid>
-            {/* 🔹 Nuevo Filtro por Líder */}
-            <Grid item>
-              <FormControl sx={{ minWidth: 150 }}>
+
+            {/* Selector de Líder */}
+            <Grid item xs={12} sm={6} md={3}>
+              <FormControl fullWidth>
                 <InputLabel>Líder</InputLabel>
-                <Select value={liderSeleccionado} onChange={(e) => setLiderSeleccionado(e.target.value)}>
+                <Select
+                  value={liderSeleccionado}
+                  onChange={(e) => setLiderSeleccionado(e.target.value)}
+                >
                   <MenuItem value="">Todos</MenuItem>
-                  {procesarDatos().lideres.map((lider) => (
+                  {obtenerLideresDeAgencia().map((lider) => (
                     <MenuItem key={lider} value={lider}>{lider}</MenuItem>
                   ))}
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item>
-              <FormControl sx={{ minWidth: 150 }}>
+
+            {/* Selector de Tipo (Mensual/Semanal) */}
+            <Grid item xs={12} sm={6} md={3}>
+              <FormControl fullWidth>
                 <InputLabel>Tipo</InputLabel>
-                <Select value={tipoSeleccionado} onChange={(e) => setTipoSeleccionado(e.target.value)}>
+                <Select
+                  value={tipoSeleccionado}
+                  onChange={(e) => setTipoSeleccionado(e.target.value)}
+                >
                   <MenuItem value="promedioMensual">Mensual</MenuItem>
                   <MenuItem value="promedioSemanal">Semanal</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
-            {/* 🔹 Selector de Fecha con `react-datepicker` */}
-            <Grid item>
-              <DatePicker
-                selected={fechaSeleccionada}
-                onChange={(date) => setFechaSeleccionada(date)}
-                locale={es} // 🌍 Español
-                dateFormat={tipoSeleccionado === "promedioMensual" ? "MMMM yyyy" : "dd/MM/yyyy"} // 📆 Formato dinámico
-                showMonthYearPicker={tipoSeleccionado === "promedioMensual"} // 🔄 Muestra selector de meses
-                showWeekNumbers={tipoSeleccionado === "promedioSemanal"} // 🔄 Muestra número de semana
 
-                renderCustomHeader={({ date, decreaseMonth, increaseMonth }) => (
-                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", size: "small" }}>
-                    <button onClick={decreaseMonth}>◀</button>
-                    <span>{format(date, "MMMM yyyy", { locale: es })}</span>
-                    <button onClick={increaseMonth}>▶</button>
-                  </div>
-                )}
-              />
-            </Grid>
+            {/* Selector de Fecha */}
+            <TextField
+              fullWidth
+              type={tipoSeleccionado === "promedioMensual" ? "month" : "date"}
+              label="Fecha"
+              value={fechaSeleccionada ? format(fechaSeleccionada, tipoSeleccionado === "promedioMensual" ? "yyyy-MM" : "yyyy-MM-dd") : ""}
+              onChange={(e) => {
+                const fecha = e.target.value; // Obtén el valor del input
+                const fechaObj = tipoSeleccionado === "promedioMensual"
+                  ? parseISO(`${fecha}-01`) // Para meses, agrega el día 01
+                  : parseISO(fecha); // Para fechas, convierte directamente
+                setFechaSeleccionada(fechaObj); // Guarda el objeto Date
+              }}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  backgroundColor: '#f9f9f9',
+                  '&:hover': {
+                    borderColor: '#3f51b5',
+                  },
+                  '&.Mui-focused': {
+                    borderColor: '#3f51b5',
+                    boxShadow: '0 0 5px rgba(63, 81, 181, 0.5)',
+                  },
+                },
+              }}
+            />
           </Grid>
-          <br></br>
-          <br></br>
-          <br></br>
-          <br></br>
-          {/* 🔹 Gráfica */}
-          <ResponsiveContainer width="100%" height={350}>
+
+          {/* Gráfica */}
+          <ResponsiveContainer width="100%" height={isMobile ? 500 : 500}>
             <BarChart
               data={procesarDatos().datos}
-              margin={{ top: 20, right: 30, left: 10, bottom: 80 }}
+              margin={{ top: 20, right: 30, left: 20, bottom: isMobile ? 100 : 80 }}
             >
-              {/* 🔹 Eje X: Vendedores agrupados por líder */}
               <XAxis
                 dataKey="vendedor"
-                angle={-90}
+                angle={isMobile ? -90 : -90}
                 textAnchor="end"
-                height={100} // Ajustar altura para acomodar líderes
+                height={isMobile ? 150 : 100}
                 interval={0}
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: isMobile ? 10 : 12 }}
                 padding={{ left: 10, right: 10 }}
-              >
-                {/* 🔹 Mostrar líderes solo una vez debajo de los vendedores */}
-                {procesarDatos().datos.map((entry, index, arr) => {
-                  const lider = entry.lider;
-                  const showLider = index === 0 || lider !== arr[index - 1].lider; // Mostrar líder solo si cambia
-
-                  return showLider ? (
-                    <text
-                      key={`Lider-${index}`}
-                      x={index * 50} // Ajustar posición
-                      y={120} // Posición del texto
-                      textAnchor="middle"
-                      style={{ fontSize: "12px", fontWeight: "bold" }}
-                    >
-                      {lider}
-                    </text>
-                  ) : null;
-                })}
-              </XAxis>
-
-              {/* 🔹 Eje Y: Formato porcentual */}
+              />
               <YAxis
                 domain={[0, 100]}
                 tickFormatter={(tick) => `${tick}%`}
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: isMobile ? 12 : 14 }}
               />
               <Tooltip formatter={(value) => `${value}%`} />
-
-              {/* 🔹 Leyenda con colores personalizados */}
               <Legend
-                wrapperStyle={{ fontSize: "12px" }}
+                wrapperStyle={{ fontSize: isMobile ? 12 : 14 }}
                 payload={[
-                  { value: "Mayor a 90%", type: "square", color: "#8BC34A" }, // Verde claro
-                  { value: "Entre 80% y 90%", type: "square", color: "#FFEB3B" }, // Amarillo claro
-                  { value: "Menor a 80%", type: "square", color: "#FF7043" } // Rojo claro
+                  { value: "Mayor a 90%", type: "square", color: "#8BC34A" },
+                  { value: "Entre 80% y 90%", type: "square", color: "#FFEB3B" },
+                  { value: "Menor a 80%", type: "square", color: "#FF7043" },
                 ]}
               />
-
-              {/* 🔹 Gráfico de barras con colores dinámicos */}
               <Bar dataKey="porcentaje" name="Porcentaje de Cumplimiento">
                 {procesarDatos().datos.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={
-                      entry.porcentaje > 90 ? "#8BC34A" : // Verde claro
-                        entry.porcentaje < 80 ? "#FF7043" : // Rojo claro
-                          "#FFEB3B" // Amarillo claro
+                      entry.porcentaje > 90 ? "#8BC34A" :
+                        entry.porcentaje < 80 ? "#FF7043" :
+                          "#FFEB3B"
                     }
                   />
                 ))}
@@ -470,14 +490,11 @@ const ExcelUploader = () => {
                   position="center"
                   angle={-90}
                   formatter={(value) => `${value}%`}
-                  style={{ fontSize: "10px", fill: "black" }}
+                  style={{ fontSize: isMobile ? 10 : 12, fill: "black" }}
                 />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-
-
-
         </CardContent>
       </Card>
     );
@@ -512,29 +529,168 @@ const ExcelUploader = () => {
       {Object.keys(promediosCalculados).length > 0 && (
         <Grid container spacing={2} alignItems="stretch">
           {/* Primera gráfica */}
-          <Grid item xs={12} md={6}>
-            <Card sx={{ p: 3, height: "100%" }}> {/* 🔹 Se asegura de que ambas tarjetas tengan la misma altura */}
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <Typography variant="h6" align="center">Gráfica de Cumplimiento de Ruta</Typography>
-                <GraficaCumplimiento data={promediosCalculados} />
-              </CardContent>
-            </Card>
+          <Grid
+            item
+            xs={12}
+            sm={isMobile ? 12 : (maximizedLeft ? 12 : 6)}
+            sx={{
+              display: isMobile || !maximizedRight ? "block" : "none",
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              style={{ height: "100%" }}
+            >
+              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
+                {!isMobile && (
+                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
+                    <IconButton
+                      size="small"
+                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
+                      onClick={() => {
+                        setMaximizedLeft(!maximizedLeft);
+                        setMaximizedRight(false);
+                      }}
+                    >
+                      {maximizedLeft ? <Remove fontSize="small" /> : <Add fontSize="small" />}
+                    </IconButton>
+                  </Box>
+                )}
+                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <Typography variant="h6" align="center">Gráfica de Cumplimiento de Ruta</Typography>
+                  <GraficaCumplimiento data={promediosCalculados} />
+                </CardContent>
+              </Card>
+            </motion.div>
           </Grid>
 
           {/* Segunda gráfica */}
-          <Grid item xs={12} md={6}>
-            <Card sx={{ p: 3, height: "100%" }}> {/* 🔹 Misma altura que la otra tarjeta */}
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <Typography variant="h6" align="center">Gráfica de Cumplimiento de Ruta (Diario)</Typography>
-                <GraficaCompleteRuta />
-              </CardContent>
-            </Card>
+          <Grid
+            item
+            xs={12}
+            sm={isMobile ? 12 : (maximizedRight ? 12 : 6)}
+            sx={{
+              display: isMobile || !maximizedLeft ? "block" : "none",
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              style={{ height: "100%" }}
+            >
+              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
+                {!isMobile && (
+                  <Box sx={{ position: "absolute", top: 10, left: 10 }}>
+                    <IconButton
+                      size="small"
+                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
+                      onClick={() => {
+                        setMaximizedRight(!maximizedRight);
+                        setMaximizedLeft(false);
+                      }}
+                    >
+                      {maximizedRight ? <Remove fontSize="small" /> : <Add fontSize="small" />}
+                    </IconButton>
+                  </Box>
+                )}
+                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <Typography variant="h6" align="center">Gráfica de Cumplimiento de Ruta (Diario)</Typography>
+                  <GraficaCompleteRuta />
+                </CardContent>
+              </Card>
+            </motion.div>
           </Grid>
         </Grid>
       )}
+
+      {/* Gráfica de Ventas Diarias */}
+        <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
+          <Grid
+            item
+            xs={12}
+            sm={isMobile ? 12 : (maximizedVentas ? 12 : 6)}
+            sx={{
+              display: isMobile || !maximizedVentas ? "block" : "none",
+            }}
+          >
+            <AnimatePresence>
+              <motion.div
+                key="grafica-ventas"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.3 }}
+                style={{ height: "100%" }}
+              >
+                <Card sx={{ p: 3, height: "100%", position: "relative" }}>
+                  {!isMobile && (
+                    <Box sx={{ position: "absolute", top: 10, right: 10 }}>
+                      <IconButton
+                        size="small"
+                        sx={{ p: 0, m: 0, width: 24, height: 24 }}
+                        onClick={() => {
+                          setMaximizedVentas(!maximizedVentas);
+                        }}
+                      >
+                        {maximizedVentas ? <Remove fontSize="small" /> : <Add fontSize="small" />}
+                      </IconButton>
+                    </Box>
+                  )}
+                  <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                    <Typography variant="h6" align="center">Gráfica de Avance de Ventas Totales</Typography>
+                    <GraficVentaDiaria />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </AnimatePresence>
+          </Grid>
+        </Grid>
+        {/* Segunda gráfica */}
+        <Grid
+            item
+            xs={12}
+            sm={isMobile ? 12 : (maximizedRight ? 12 : 6)}
+            sx={{
+              display: isMobile || !maximizedLeft ? "block" : "none",
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              style={{ height: "100%" }}
+            >
+              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
+                {!isMobile && (
+                  <Box sx={{ position: "absolute", top: 10, left: 10 }}>
+                    <IconButton
+                      size="small"
+                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
+                      onClick={() => {
+                        setMaximizedRight(!maximizedRight);
+                        setMaximizedLeft(false);
+                      }}
+                    >
+                      {maximizedRight ? <Remove fontSize="small" /> : <Add fontSize="small" />}
+                    </IconButton>
+                  </Box>
+                )}
+                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <Typography variant="h6" align="center">Gráfica de Ventas  (Diario)</Typography>
+                  <GraficVentaDiariaLine />
+                </CardContent>
+              </Card>
+            </motion.div>
+          </Grid>
     </div>
   );
 
-};
+}
 
 export default ExcelUploader;
