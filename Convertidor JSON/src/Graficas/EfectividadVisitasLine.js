@@ -4,7 +4,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } f
 import { Card, CardContent, Grid, TextField, FormControl, InputLabel, Select, MenuItem, FormGroup, FormControlLabel, Checkbox } from "@mui/material";
 import { format, parseISO, isValid } from "date-fns";
 
-const GraficVentaDiaria = () => {
+const GraficEfectividadVisitasLine = () => {
   const [firebaseData, setFirebaseData] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [selectedAgencia, setSelectedAgencia] = useState("");
@@ -34,7 +34,7 @@ const GraficVentaDiaria = () => {
     let formattedData = [];
     Object.keys(data).forEach((agencia) => {
       Object.values(data[agencia]).forEach((entry) => {
-        if (entry.Fecha && entry["Avance de Ventas Totales "]) {
+        if (entry.Fecha && entry["Efectividad de Visitas"]) { // Cambiar a "Efectividad de Visitas"
           let fecha = parseISO(entry.Fecha);
           if (isValid(fecha)) {
             formattedData.push({
@@ -43,7 +43,7 @@ const GraficVentaDiaria = () => {
               Vendedor: entry["Ruta "] || "Desconocido",
               Lider: entry.LIDER || "Sin líder",
               Agencia: agencia,
-              Ventas: parseFloat(entry["Avance de Ventas Totales "]) || 0,
+              EfectividadVisitas: parseFloat(entry["Efectividad de Visitas"].replace("%", "")) || 0, // Cambiar a "EfectividadVisitas"
             });
           }
         }
@@ -147,67 +147,49 @@ const GraficVentaDiaria = () => {
           </Grid>
         </Grid>
 
-        {/* Checkboxes 
-        <Grid container justifyContent="center" sx={{ mt: 2 }}>
-          <FormGroup row>
-            <FormControlLabel
-              control={<Checkbox checked={filterCob} onChange={(e) => setFilterCob(e.target.checked)} />}
-              label="COB"
-            />
-            <FormControlLabel
-              control={<Checkbox checked={filterMay} onChange={(e) => setFilterMay(e.target.checked)} />}
-              label="MAY"
-            />
-            <FormControlLabel
-              control={<Checkbox checked={filterHorPan} onChange={(e) => setFilterHorPan(e.target.checked)} />}
-              label="HOR-PAN"
-            />
-          </FormGroup>
-        </Grid>
-*/}
         {/* Gráfica de líneas */}
         <ResponsiveContainer width="100%" height={window.innerWidth < 600 ? 300 : 400}>
-  <LineChart
-    data={filteredData}
-    margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
-  >
-    <XAxis
-      dataKey="Fecha"
-      angle={window.innerWidth < 600 ? -90 : -45}
-      textAnchor="end"
-      type="number"
-      domain={['dataMin', 'dataMax']}
-      tickFormatter={(tick) => format(new Date(tick), "dd/MM/yyyy")}
-    />
-    <YAxis domain={[0, 100]} tickFormatter={(tick) => `$${tick.toLocaleString()}`} />
-    <Tooltip
-      formatter={(value) => `$${value.toLocaleString()}`}
-      labelFormatter={(label) => format(new Date(label), "EEEE, dd 'de' MMMM 'de' yyyy")}
-    />
-    <Legend
-      layout={window.innerWidth < 600 ? 'horizontal' : 'vertical'}
-      align={window.innerWidth < 600 ? 'center' : 'right'}
-      verticalAlign={window.innerWidth < 600 ? 'bottom' : 'middle'}
-      wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
-    />
-    {/* Renderizar las líneas para todos los vendedores filtrados */}
-    {[...new Set(filteredData.map(d => d.Vendedor))].map((vendedor, index) => (
-      <Line
-        key={vendedor}
-        type="monotone"
-        dataKey="Ventas"
-        data={filteredData.filter(d => d.Vendedor === vendedor)}
-        name={vendedor}
-        stroke={colores[index % colores.length]}
-        strokeWidth={2}
-        connectNulls={true}
-      />
-    ))}
-  </LineChart>
-</ResponsiveContainer>
+          <LineChart
+            data={filteredData}
+            margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+          >
+            <XAxis
+              dataKey="Fecha"
+              angle={window.innerWidth < 600 ? -90 : -45}
+              textAnchor="end"
+              type="number"
+              domain={['dataMin', 'dataMax']}
+              tickFormatter={(tick) => format(new Date(tick), "dd/MM/yyyy")}
+            />
+            <YAxis domain={[0, 100]} tickFormatter={(tick) => `${tick.toLocaleString()}%`} />
+            <Tooltip
+              formatter={(value) => `${value.toLocaleString()}%`}
+              labelFormatter={(label) => format(new Date(label), "EEEE, dd 'de' MMMM 'de' yyyy")}
+            />
+            <Legend
+              layout={window.innerWidth < 600 ? 'horizontal' : 'vertical'}
+              align={window.innerWidth < 600 ? 'center' : 'right'}
+              verticalAlign={window.innerWidth < 600 ? 'bottom' : 'middle'}
+              wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
+            />
+            {/* Renderizar las líneas para todos los vendedores filtrados */}
+            {[...new Set(filteredData.map(d => d.Vendedor))].map((vendedor, index) => (
+              <Line
+                key={vendedor}
+                type="monotone"
+                dataKey="EfectividadVisitas" // Cambiar a "EfectividadVisitas"
+                data={filteredData.filter(d => d.Vendedor === vendedor)}
+                name={vendedor}
+                stroke={colores[index % colores.length]}
+                strokeWidth={2}
+                connectNulls={true}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
       </CardContent>
     </Card>
   );
 };
 
-export default GraficVentaDiaria;
+export default GraficEfectividadVisitasLine;

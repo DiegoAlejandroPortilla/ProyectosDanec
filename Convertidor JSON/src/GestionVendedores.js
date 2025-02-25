@@ -55,7 +55,15 @@ const ExcelReader = () => {
         const [hours, minutes, seconds] = time.split(":").map(Number);
         return hours * 60 + minutes + (seconds / 60);
     };
-
+    const formatTime = (totalMinutes) => {
+        if (isNaN(totalMinutes) || totalMinutes <= 0) return "00:00:00";
+        
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = Math.floor(totalMinutes % 60);
+        const seconds = Math.round((totalMinutes % 1) * 60);
+    
+        return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+    };
 
 
     const handleProcessFile = () => {
@@ -188,9 +196,9 @@ const ExcelReader = () => {
                     ticketPromedio: vendedor.Clientes_Con_Venta.size > 0
                         ? "$" + (vendedor.totalVentas / vendedor.Clientes_Con_Venta.size).toFixed(2)
                         : "$0.00",
-                    tiempoPromedioVisitas: vendedor.cantidadVisitas > 0
-                        ? (vendedor.tiempoTotalVisitas / vendedor.cantidadVisitas).toFixed(2) + " min"
-                        : "0.00 min",
+                        tiempoPromedioVisitas: vendedor.cantidadVisitas > 0
+                        ? formatTime(vendedor.tiempoTotalVisitas / vendedor.cantidadVisitas)
+                        : "00:00:00",
                         efectividadVentas: vendedor.planificados > 0
                         ? ((parseFloat(vendedor.Clientes_Con_Venta.size) / parseFloat(vendedor.planificados)) * 100).toFixed(2) + "%"
                         : "S/P",

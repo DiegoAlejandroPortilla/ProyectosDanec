@@ -4,10 +4,10 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Labe
 import { FormControl, Select, MenuItem, InputLabel, Card, FormControlLabel, FormGroup, CardContent, Grid, TextField, Checkbox } from "@mui/material";
 import { format, getISOWeek, parseISO } from "date-fns";
 
-const GraficVentaDiaria = () => {
+const GraficEfectividadVisitas = () => {
   const [data, setData] = useState({});
   const [agenciaSeleccionada, setAgenciaSeleccionada] = useState("");
-  const [tipoSeleccionado, setTipoSeleccionado] = useState("totalMensual");
+  const [tipoSeleccionado, setTipoSeleccionado] = useState("efectividadMensual");
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
   const [liderSeleccionado, setLiderSeleccionado] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -21,10 +21,11 @@ const GraficVentaDiaria = () => {
     onValue(dbRef, (snapshot) => {
       if (snapshot.exists()) {
         let firebaseData = snapshot.val();
-        const ventasPorAgencia = calcularVentasTotales(firebaseData);
-        setData(ventasPorAgencia);
+        const efectividadPorAgencia = calcularEfectividadVisitas(firebaseData);
+        setData(efectividadPorAgencia);
+        console.log("✅ Datos obtenidos efectividad:", efectividadPorAgencia);
 
-        if (ventasPorAgencia["CUE"]) {
+        if (efectividadPorAgencia["CUE"]) {
           setAgenciaSeleccionada("CUE");
         }
       }
@@ -33,51 +34,77 @@ const GraficVentaDiaria = () => {
     });
   }, []);
 
-  const calcularVentasTotales = (firebaseData) => {
-    let ventasPorAgencia = {};
+  const calcularEfectividadVisitas = (firebaseData) => {
+    let efectividadPorAgencia = {};
     Object.keys(firebaseData).forEach((agencia) => {
       let registros = firebaseData[agencia];
-      let ventasVendedores = {};
+      let efectividadVendedores = {};
 
       Object.values(registros).forEach((registro) => {
-        if (!registro["Fecha"] || !registro["Avance de Ventas Totales "] || !registro["Vendedor "]) return;
+        if (!registro["Fecha"] || !registro["Efectividad de Visitas"] || !registro["Vendedor "]) return;
+
         let fecha = new Date(registro["Fecha"]);
         let mes = format(fecha, "yyyy-MM");
         let semana = `${format(fecha, "yyyy")}-W${getISOWeek(fecha)}`;
         let vendedor = registro["Vendedor "].trim();
         let lider = registro["LIDER"] ? registro["LIDER"].trim() : "";
-        let ventas = parseFloat(registro["Avance de Ventas Totales "]) || 0;
+        let efectividadVisitas = parseFloat(registro["Efectividad de Visitas"].replace("%", "")) || 0;
 
-        if (!ventasVendedores[vendedor]) {
-          ventasVendedores[vendedor] = {
+        if (!efectividadVendedores[vendedor]) {
+          efectividadVendedores[vendedor] = {
             lider: lider,
-            totalMensual: {},
-            totalSemanal: {}
+            efectividadMensual: {},
+            efectividadSemanal: {},
+            conteoMensual: {}, // Contador de registros por mes
+            conteoSemanal: {}  // Contador de registros por semana
           };
         }
 
-        if (!ventasVendedores[vendedor].totalMensual[mes]) {
-          ventasVendedores[vendedor].totalMensual[mes] = 0;
+        // Acumulación de la efectividad de visitas mensual
+        if (!efectividadVendedores[vendedor].efectividadMensual[mes]) {
+          efectividadVendedores[vendedor].efectividadMensual[mes] = 0;
+          efectividadVendedores[vendedor].conteoMensual[mes] = 0;
         }
-        ventasVendedores[vendedor].totalMensual[mes] += ventas;
+        efectividadVendedores[vendedor].efectividadMensual[mes] += efectividadVisitas;
+        efectividadVendedores[vendedor].conteoMensual[mes] += 1;
 
-        if (!ventasVendedores[vendedor].totalSemanal[semana]) {
-          ventasVendedores[vendedor].totalSemanal[semana] = 0;
+        // Acumulación de la efectividad de visitas semanal
+        if (!efectividadVendedores[vendedor].efectividadSemanal[semana]) {
+          efectividadVendedores[vendedor].efectividadSemanal[semana] = 0;
+          efectividadVendedores[vendedor].conteoSemanal[semana] = 0;
         }
-        ventasVendedores[vendedor].totalSemanal[semana] += ventas;
+        efectividadVendedores[vendedor].efectividadSemanal[semana] += efectividadVisitas;
+        efectividadVendedores[vendedor].conteoSemanal[semana] += 1;
       });
 
-      ventasPorAgencia[agencia] = ventasVendedores;
+      // Calcular promedios
+      Object.keys(efectividadVendedores).forEach((vendedor) => {
+        // Promedio mensual
+        Object.keys(efectividadVendedores[vendedor].efectividadMensual).forEach((mes) => {
+          let suma = efectividadVendedores[vendedor].efectividadMensual[mes];
+          let conteo = efectividadVendedores[vendedor].conteoMensual[mes];
+          efectividadVendedores[vendedor].efectividadMensual[mes] = suma / conteo;
+        });
+
+        // Promedio semanal
+        Object.keys(efectividadVendedores[vendedor].efectividadSemanal).forEach((semana) => {
+          let suma = efectividadVendedores[vendedor].efectividadSemanal[semana];
+          let conteo = efectividadVendedores[vendedor].conteoSemanal[semana];
+          efectividadVendedores[vendedor].efectividadSemanal[semana] = suma / conteo;
+        });
+      });
+
+      efectividadPorAgencia[agencia] = efectividadVendedores;
     });
 
-    return ventasPorAgencia;
+    return efectividadPorAgencia;
   };
 
   const obtenerPeriodo = () => {
     if (!fechaSeleccionada || !(fechaSeleccionada instanceof Date)) {
       return "";
     }
-    return tipoSeleccionado === "totalMensual"
+    return tipoSeleccionado === "efectividadMensual"
       ? format(fechaSeleccionada, "yyyy-MM")
       : `${format(fechaSeleccionada, "yyyy")}-W${getISOWeek(fechaSeleccionada)}`;
   };
@@ -98,35 +125,33 @@ const GraficVentaDiaria = () => {
 
   const procesarDatos = () => {
     if (!data[agenciaSeleccionada]) return { datos: [], lideres: [] };
-  
+
     const vendedores = data[agenciaSeleccionada];
     const periodo = obtenerPeriodo();
     let datosFinales = [];
-  
+
     Object.entries(vendedores).forEach(([vendedor, info]) => {
       const lider = info.lider || "Sin Líder";
-      const ventas = info[tipoSeleccionado]?.[periodo] || 0;
-  
+      const efectividadVisitas = info[tipoSeleccionado]?.[periodo] || 0;
+
       // Si el checkbox correspondiente está desactivado, excluir al vendedor
       const ocultarVendedor =
         (!filterCob && vendedor.includes("VeCob")) ||
         (!filterMay && vendedor.includes("VeMay")) ||
         (!filterHorPan && vendedor.includes("VePan")) ||
         (!filterHorPan && vendedor.includes("VeHor")) ||
-        (!filterMay && vendedor.includes("EsMay"))||
+        (!filterMay && vendedor.includes("EsMay")) ||
         (!filterInd && vendedor.includes("VeInd"));
-  
+
       // Solo incluir vendedores que NO estén en la lista de ocultos
-      if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && ventas > 0) {
-        datosFinales.push({ vendedor, ventas });
+      if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && efectividadVisitas > 0) {
+        datosFinales.push({ vendedor, efectividadVisitas });
       }
     });
-  
+
     return { datos: datosFinales, lideres: Object.values(vendedores).map((v) => v.lider) };
   };
-  
-  
-  
+
   return (
     <Card sx={{ mt: 3, p: 2, maxWidth: "100%" }}>
       <CardContent>
@@ -171,47 +196,46 @@ const GraficVentaDiaria = () => {
                 value={tipoSeleccionado}
                 onChange={(e) => setTipoSeleccionado(e.target.value)}
               >
-                <MenuItem value="totalMensual">Mensual</MenuItem>
-                <MenuItem value="totalSemanal">Semanal</MenuItem>
+                <MenuItem value="efectividadMensual">Mensual</MenuItem>
+                <MenuItem value="efectividadSemanal">Semanal</MenuItem>
               </Select>
             </FormControl>
           </Grid>
         </Grid>
 
         {/* Fila para la Fecha */}
-            <TextField
-              fullWidth
-              type={tipoSeleccionado === "promedioMensual" ? "month" : "date"}
-              label="Fecha"
-              value={fechaSeleccionada ? format(fechaSeleccionada, tipoSeleccionado === "promedioMensual" ? "yyyy-MM" : "yyyy-MM-dd") : ""}
-              onChange={(e) => {
-                const fecha = e.target.value;
-                const fechaObj = tipoSeleccionado === "promedioMensual"
-                  ? parseISO(`${fecha}-01`)
-                  : parseISO(fecha);
-                setFechaSeleccionada(fechaObj);
-              }}
-              InputLabelProps={{
-                shrink: true,
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '4px',
-                  border: '1px solid #ccc',
-                  backgroundColor: '#f9f9f9',
-                  '&:hover': {
-                    borderColor: '#3f51b5',
-                  },
-                  '&.Mui-focused': {
-                    borderColor: '#3f51b5',
-                    boxShadow: '0 0 5px rgba(0, 37, 248, 0.5)',
-                  },
-                },
-              }}
-            />
+        <TextField
+          fullWidth
+          type={tipoSeleccionado === "efectividadMensual" ? "month" : "date"}
+          label="Fecha"
+          value={fechaSeleccionada ? format(fechaSeleccionada, tipoSeleccionado === "efectividadMensual" ? "yyyy-MM" : "yyyy-MM-dd") : ""}
+          onChange={(e) => {
+            const fecha = e.target.value;
+            const fechaObj = tipoSeleccionado === "efectividadMensual"
+              ? parseISO(`${fecha}-01`)
+              : parseISO(fecha);
+            setFechaSeleccionada(fechaObj);
+          }}
+          InputLabelProps={{
+            shrink: true,
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              borderRadius: '4px',
+              border: '1px solid #ccc',
+              backgroundColor: '#f9f9f9',
+              '&:hover': {
+                borderColor: '#3f51b5',
+              },
+              '&.Mui-focused': {
+                borderColor: '#3f51b5',
+                boxShadow: '0 0 5px rgba(0, 37, 248, 0.5)',
+              },
+            },
+          }}
+        />
 
-
-        {/* Checkboxes centrados */}
+        {/* Checkboxes centrados 
         <Grid container justifyContent="center" sx={{ mt: 2 }}>
           <FormGroup row>
             <FormControlLabel
@@ -232,7 +256,7 @@ const GraficVentaDiaria = () => {
             />
           </FormGroup>
         </Grid>
-
+*/}
         {/* Gráfico de barras */}
         <ResponsiveContainer width="100%" height={500}>
           <BarChart data={procesarDatos().datos} margin={{ top: 20, bottom: 20 }}>
@@ -246,18 +270,18 @@ const GraficVentaDiaria = () => {
               padding={{ left: 10, right: 10 }}
             />
             <YAxis
-              tickFormatter={(tick) => `$${tick.toLocaleString()}`}
+              tickFormatter={(tick) => `${tick.toLocaleString()}%`}
               domain={[0, 100]}
               tick={{ fontSize: isMobile ? 8 : 10 }}
             />
-            <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
+            <Tooltip formatter={(value) => `${value.toLocaleString()}%`} />
             <Legend
               layout={window.innerWidth < 600 ? 'horizontal' : 'vertical'}
               align={window.innerWidth < 600 ? 'center' : 'right'}
               verticalAlign={window.innerWidth < 600 ? 'bottom' : 'middle'}
               wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
             />
-            <Bar dataKey="ventas" name="Ventas Totales ($)">
+            <Bar dataKey="efectividadVisitas" name="Efectividad de Visitas (%)">
               {procesarDatos().datos.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
@@ -265,10 +289,10 @@ const GraficVentaDiaria = () => {
                 />
               ))}
               <LabelList
-                dataKey="ventas"
+                dataKey="efectividadVisitas"
                 position="center"
                 angle={-90}
-                formatter={(value) => `$${value.toFixed(2)}`}
+                formatter={(value) => `${value.toFixed(2)}%`}
                 style={{ fontSize: isMobile ? 10 : 12, fill: "black" }}
               />
             </Bar>
@@ -279,4 +303,4 @@ const GraficVentaDiaria = () => {
   );
 };
 
-export default GraficVentaDiaria;
+export default GraficEfectividadVisitas;
