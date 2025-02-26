@@ -191,7 +191,8 @@ const GraficVentaDiaria = () => {
       wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
     />
     {/* Renderizar las líneas para todos los vendedores filtrados */}
-    {[...new Set(filteredData.map(d => d.Vendedor))].map((vendedor, index) => (
+    {selectedAgencia &&
+    [...new Set(filteredData.map(d => d.Vendedor))].map((vendedor, index) => (
       <Line
         key={vendedor}
         type="monotone"

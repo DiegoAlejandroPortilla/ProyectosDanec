@@ -57,11 +57,11 @@ const ExcelReader = () => {
     };
     const formatTime = (totalMinutes) => {
         if (isNaN(totalMinutes) || totalMinutes <= 0) return "00:00:00";
-        
+
         const hours = Math.floor(totalMinutes / 60);
         const minutes = Math.floor(totalMinutes % 60);
         const seconds = Math.round((totalMinutes % 1) * 60);
-    
+
         return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
     };
 
@@ -196,13 +196,13 @@ const ExcelReader = () => {
                     ticketPromedio: vendedor.Clientes_Con_Venta.size > 0
                         ? "$" + (vendedor.totalVentas / vendedor.Clientes_Con_Venta.size).toFixed(2)
                         : "$0.00",
-                        tiempoPromedioVisitas: vendedor.cantidadVisitas > 0
+                    tiempoPromedioVisitas: vendedor.cantidadVisitas > 0
                         ? formatTime(vendedor.tiempoTotalVisitas / vendedor.cantidadVisitas)
                         : "00:00:00",
-                        efectividadVentas: vendedor.planificados > 0
+                    efectividadVentas: vendedor.planificados > 0
                         ? ((parseFloat(vendedor.Clientes_Con_Venta.size) / parseFloat(vendedor.planificados)) * 100).toFixed(2) + "%"
                         : "S/P",
-                    
+
 
                     valorPorCliente: vendedor.clientesProcesados.size > 0
                         ? "$" + (vendedor.totalVentas / vendedor.clientesProcesados.size).toFixed(2)
@@ -233,14 +233,14 @@ const ExcelReader = () => {
         const ws = XLSX.utils.json_to_sheet(data.map(row => ({
             Vendedor: row.Vendedor,
             Planificados: row.planificados,
-            "Valor Total": row.totalVentas,
-            "Valor Total FUERA DE RUTA": row.valorTotalFueraRuta,
-            "Hora Inicio": row.hora_inicio || "Sin registro",
-            "Hora Fin": row.hora_final || "Sin registro",
+            "Cumplimiento Ruta": row.cumplimientoRuta,
             "Efectividad Visitas": row.efectividadVisitas,
             "Efectividad Ventas": row.efectividadVentas,
-            "Cumplimiento Ruta": row.cumplimientoRuta,
+            "Valor Total": row.totalVentas,
+            "Valor Total FUERA DE RUTA": row.valorTotalFueraRuta,
             "Ticket Promedio": row.ticketPromedio,
+            "Hora Inicio": row.hora_inicio || "Sin registro",
+            "Hora Fin": row.hora_final || "Sin registro",    
             "Tiempo Promedio Visitas": row.tiempoPromedioVisitas,
             "Clientes con Venta": row.Clientes_Con_Venta.size,
             "Clientes sin Venta": row.Clientes_Sin_Venta.size,
@@ -291,14 +291,14 @@ const ExcelReader = () => {
                         <TableRow>
                             <StyledTableCell>Vendedor</StyledTableCell>
                             <StyledTableCell>Planificados</StyledTableCell>
+                            <StyledTableCell>Cumplimiento Ruta</StyledTableCell>
+                            <StyledTableCell>Efectividad Visitas</StyledTableCell>
+                            <StyledTableCell>Efectividad de Ventas</StyledTableCell>
                             <StyledTableCell>Valor Total</StyledTableCell>
                             <StyledTableCell>Valor Total FUERA DE RUTA</StyledTableCell>
-                            <StyledTableCell>Hora Inicio</StyledTableCell>
-                            <StyledTableCell>Hora Fin</StyledTableCell>
-                            <StyledTableCell>Efectividad Visitas</StyledTableCell>
-                            <StyledTableCell>Cumplimiento Ruta</StyledTableCell>
                             <StyledTableCell>Ticket Promedio</StyledTableCell>
-                            <StyledTableCell>Efectividad de Ventas</StyledTableCell>
+                            <StyledTableCell>Hora Inicio</StyledTableCell>
+                            <StyledTableCell>Hora Fin</StyledTableCell>                       
                             <StyledTableCell>Tiempo Promedio Visitas</StyledTableCell>
                         </TableRow>
                     </TableHead>
@@ -338,14 +338,14 @@ const ExcelReader = () => {
                                     </TableCell>
                                 </Tooltip>
                                 <TableCell sx={{ textAlign: "center" }}>{row.planificados}</TableCell>
+                                <TableCell sx={{ textAlign: "center" }}>{row.cumplimientoRuta}</TableCell>
+                                <TableCell sx={{ textAlign: "center" }}>{row.efectividadVisitas}</TableCell>
+                                <TableCell sx={{ textAlign: "center" }}>{row.efectividadVentas}</TableCell>
                                 <TableCell sx={{ textAlign: "center" }}>{"$" + (row.totalVentas?.toFixed(2) || "0.00")}</TableCell>
                                 <TableCell sx={{ textAlign: "center" }}>{row.valorTotalFueraRuta}</TableCell>
+                                <TableCell sx={{ textAlign: "center" }}>{row.ticketPromedio}</TableCell>
                                 <TableCell sx={{ textAlign: "center" }}>{row.hora_inicio || "Sin registro"}</TableCell>
                                 <TableCell sx={{ textAlign: "center" }}>{row.hora_final || "Sin registro"}</TableCell>
-                                <TableCell sx={{ textAlign: "center" }}>{row.efectividadVisitas}</TableCell>
-                                <TableCell sx={{ textAlign: "center" }}>{row.cumplimientoRuta}</TableCell>
-                                <TableCell sx={{ textAlign: "center" }}>{row.ticketPromedio}</TableCell>
-                                <TableCell sx={{ textAlign: "center" }}>{row.efectividadVentas}</TableCell>
                                 <TableCell sx={{ textAlign: "center" }}>{row.tiempoPromedioVisitas}</TableCell>
                             </StyledTableRow>
                         ))}

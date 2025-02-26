@@ -39,7 +39,7 @@ function App() {
           
           
           <Tab label="Extracción Datos Vendedor  " />
-          <Tab label="Gráficas" />
+          <Tab label="Indicadores" />
           
         </Tabs>
       </Box>
