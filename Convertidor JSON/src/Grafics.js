@@ -13,8 +13,14 @@ import GraficTicketPromedio from "./Graficas/GraficTicketPromedio";
 import GraficTicketPromedioLine from "./Graficas/GraficTicketPromedioLine";
 import GraficEfectividadVisitas from "./Graficas/EfectividadVisitas";
 import GraficEfectividadVisitasLine from "./Graficas/EfectividadVisitasLine";
+import GraficEfectividadVentas from "./Graficas/EfectividadVenta";
+import GraficEfectividadVentasLine from "./Graficas/EfectividadVentasLine";
+import GraficaHoraInicio from "./Graficas/HoraInicio";
+import GraficaHoraInicioLine from "./Graficas/HoraInicioLine";
 import "./Grafics.css";
 import { motion, AnimatePresence } from "framer-motion";
+import GraficHoraInicio from "./Graficas/HoraInicio";
+import GraficHoraInicioLine from "./Graficas/HoraInicioLine";
 const ExcelUploader = () => {
   const [file, setFile] = useState(null);
   const [excelData, setExcelData] = useState({});
@@ -29,6 +35,11 @@ const ExcelUploader = () => {
   const [maximizedTicketLine, setMaximizedTicketLine] = useState(false);
   const [maximizedVisitas, setMaximizedVisitas] = useState(false);
   const [maximizedVisitasLine, setMaximizedVisitasLine] = useState(false);
+  const [maximizedEfeVentas, setMaximizedEfeVentas] = useState(false);
+  const [maximizedEfeVentasLine, setMaximizedEfeVentasLine] = useState(false);
+  const [maximizedHoraInicio, setMaximizedHoraInicio] = useState(false);
+  const [maximizedHoraInicioLine, setMaximizedHoraInicioLine] = useState(false);
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", handleResize);
@@ -899,7 +910,191 @@ const ExcelUploader = () => {
         </Grid>
       </Grid>
 
+      {/* Novena y Decima */}
+      <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
+        <Grid
+          item
+          xs={12}
+          sm={isMobile ? 12 : (maximizedEfeVentas ? 12 : 6)}
+          sx={{
+            display:
+              isMobile || // Mostrar siempre en móvil
+                (!maximizedEfeVentas && !maximizedEfeVentasLine) || // Mostrar si ninguna está maximizada
+                maximizedEfeVentas // Mostrar si esta gráfica está maximizada
+                ? "block"
+                : "none",
+          }}
+        >
+          <AnimatePresence>
+            <motion.div
+              key="grafica-EfectividadVentas"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              style={{ height: "100%" }}
+            >
+              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
+                {!isMobile && (
+                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
+                    <IconButton
+                      size="small"
+                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
+                      onClick={() => {
+                        setMaximizedEfeVentas(!maximizedEfeVentas);
+                        setMaximizedEfeVentasLine(false); // Ocultar la otra gráfica al maximizar esta
+                      }}
+                    >
+                      {maximizedEfeVentas ? <Remove fontSize="small" /> : <Add fontSize="small" />}
+                    </IconButton>
+                  </Box>
+                )}
+                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <Typography variant="h6" align="center">Gráfica de Efectividad de Ventas</Typography>
+                  <GraficEfectividadVentas/>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </AnimatePresence>
+        </Grid>
 
+        {/* Octava Grafica */}
+        <Grid
+          item
+          xs={12}
+          sm={isMobile ? 12 : (maximizedEfeVentasLine ? 12 : 6)}
+          sx={{
+            display:
+              isMobile || // Mostrar siempre en móvil
+                (!maximizedEfeVentas && !maximizedEfeVentasLine) || // Mostrar si ninguna está maximizada
+                maximizedEfeVentasLine // Mostrar si esta gráfica está maximizada
+                ? "block"
+                : "none",
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.3 }}
+            style={{ height: "100%" }}
+          >
+            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
+              {!isMobile && (
+                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
+                  <IconButton
+                    size="small"
+                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
+                    onClick={() => {
+                      setMaximizedEfeVentasLine(!maximizedEfeVentasLine);
+                      setMaximizedEfeVentas(false); // Ocultar la otra gráfica al maximizar esta
+                    }}
+                  >
+                    {maximizedEfeVentasLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
+                  </IconButton>
+                </Box>
+              )}
+              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <Typography variant="h6" align="center">Gráfica Efectividad de Ventas (Diario)</Typography>
+                <GraficEfectividadVentasLine />
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+      </Grid>
+
+      {/* Onceava y Doceava */}
+      <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
+        <Grid
+          item
+          xs={12}
+          sm={isMobile ? 12 : (maximizedHoraInicio ? 12 : 6)}
+          sx={{
+            display:
+              isMobile || // Mostrar siempre en móvil
+                (!maximizedHoraInicio && !maximizedHoraInicioLine) || // Mostrar si ninguna está maximizada
+                maximizedEfeVentas // Mostrar si esta gráfica está maximizada
+                ? "block"
+                : "none",
+          }}
+        >
+          <AnimatePresence>
+            <motion.div
+              key="grafica-HoraInicio"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              style={{ height: "100%" }}
+            >
+              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
+                {!isMobile && (
+                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
+                    <IconButton
+                      size="small"
+                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
+                      onClick={() => {
+                        setMaximizedHoraInicio(!maximizedHoraInicio);
+                        setMaximizedHoraInicioLine(false); // Ocultar la otra gráfica al maximizar esta
+                      }}
+                    >
+                      {maximizedHoraInicio ? <Remove fontSize="small" /> : <Add fontSize="small" />}
+                    </IconButton>
+                  </Box>
+                )}
+                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <Typography variant="h6" align="center">Gráfica de Hora Inicio</Typography>
+                  <GraficHoraInicio/>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </AnimatePresence>
+        </Grid>
+
+        {/* Octava Grafica */}
+        <Grid
+          item
+          xs={12}
+          sm={isMobile ? 12 : (maximizedHoraInicioLine ? 12 : 6)}
+          sx={{
+            display:
+              isMobile || // Mostrar siempre en móvil
+                (!maximizedHoraInicio && !maximizedHoraInicioLine) || // Mostrar si ninguna está maximizada
+                maximizedHoraInicioLine // Mostrar si esta gráfica está maximizada
+                ? "block"
+                : "none",
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.3 }}
+            style={{ height: "100%" }}
+          >
+            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
+              {!isMobile && (
+                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
+                  <IconButton
+                    size="small"
+                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
+                    onClick={() => {
+                      setMaximizedHoraInicioLine(!maximizedHoraInicioLine);
+                      setMaximizedHoraInicio(false); // Ocultar la otra gráfica al maximizar esta
+                    }}
+                  >
+                    {maximizedHoraInicioLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
+                  </IconButton>
+                </Box>
+              )}
+              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <Typography variant="h6" align="center">Gráfica Efectividad de Ventas (Diario)</Typography>
+                <GraficHoraInicioLine />
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+      </Grid>
 
     </div>
   );

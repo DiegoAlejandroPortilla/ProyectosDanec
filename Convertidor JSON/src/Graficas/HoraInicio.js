@@ -4,10 +4,10 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Labe
 import { FormControl, Select, MenuItem, InputLabel, Card, FormControlLabel, FormGroup, CardContent, Grid, TextField, Checkbox } from "@mui/material";
 import { format, getISOWeek, parseISO } from "date-fns";
 
-const GraficEfectividadVentas = () => {
+const GraficHoraInicio = () => {
   const [data, setData] = useState({});
   const [agenciaSeleccionada, setAgenciaSeleccionada] = useState("");
-  const [tipoSeleccionado, setTipoSeleccionado] = useState("efectividadMensual");
+  const [tipoSeleccionado, setTipoSeleccionado] = useState("horaMensual");
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
   const [liderSeleccionado, setLiderSeleccionado] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -21,11 +21,11 @@ const GraficEfectividadVentas = () => {
     onValue(dbRef, (snapshot) => {
       if (snapshot.exists()) {
         let firebaseData = snapshot.val();
-        const efectividadPorAgencia = calcularEfectividadVentas(firebaseData);
-        setData(efectividadPorAgencia);
-        console.log("✅ Datos obtenidos efectividad de ventas:", efectividadPorAgencia);
+        const horaInicioPorAgencia = calcularHoraInicioVisitas(firebaseData);
+        setData(horaInicioPorAgencia);
+        console.log("✅ Datos obtenidos (Hora Inicio):", horaInicioPorAgencia);
 
-        if (efectividadPorAgencia["CUE"]) {
+        if (horaInicioPorAgencia["CUE"]) {
           setAgenciaSeleccionada("CUE");
         }
       }
@@ -34,84 +34,92 @@ const GraficEfectividadVentas = () => {
     });
   }, []);
 
-  const calcularEfectividadVentas = (firebaseData) => {
-    let efectividadPorAgencia = {};
+  // Convertir hora en formato "HH:mm:ss" a horas decimales (ej: "08:21:00" -> 8.35)
+  const convertirHoraADecimal = (hora) => {
+    const [horas, minutos, segundos] = hora.split(":").map(Number);
+    return horas + minutos / 60 + segundos / 3600;
+  };
+
+  // Convertir horas decimales a formato "HH:mm:ss"
+  const convertirDecimalAHora = (decimal) => {
+    const horas = Math.floor(decimal);
+    const minutos = Math.floor((decimal - horas) * 60);
+    const segundos = Math.floor(((decimal - horas) * 60 - minutos) * 60);
+    return `${String(horas).padStart(2, "0")}:${String(minutos).padStart(2, "0")}:${String(segundos).padStart(2, "0")}`;
+  };
+
+  const calcularHoraInicioVisitas = (firebaseData) => {
+    let horaInicioPorAgencia = {};
     Object.keys(firebaseData).forEach((agencia) => {
       let registros = firebaseData[agencia];
-      let efectividadVendedores = {};
-  
+      let horaInicioVendedores = {};
+
       Object.values(registros).forEach((registro) => {
-        // Verificar que los campos necesarios estén presentes
-        if (!registro["Fecha"] || !registro["Vendedor "]) return;
-  
-        // Asegurarse de que 'Efectividad de Ventas ' sea una cadena de texto
-        let efectividadVentasStr = registro["Efectividad de Ventas "];
-        if (typeof efectividadVentasStr !== "string") {
-          efectividadVentasStr = "0%"; // Valor predeterminado si no es una cadena
-        }
-  
+        if (!registro["Fecha"] || !registro["Hora Inicio_Primer Registro Visita"] || !registro["Vendedor "]) return;
+
         let fecha = new Date(registro["Fecha"]);
+        let horaInicio = registro["Hora Inicio_Primer Registro Visita"];
+        let horaDecimal = convertirHoraADecimal(horaInicio); // Convertir a horas decimales
         let mes = format(fecha, "yyyy-MM");
         let semana = `${format(fecha, "yyyy")}-W${getISOWeek(fecha)}`;
         let vendedor = registro["Vendedor "].trim();
         let lider = registro["LIDER"] ? registro["LIDER"].trim() : "";
-        let efectividadVentas = parseFloat(efectividadVentasStr.replace("%", "")) || 0; // Convertir a número
-  
-        if (!efectividadVendedores[vendedor]) {
-          efectividadVendedores[vendedor] = {
+
+        if (!horaInicioVendedores[vendedor]) {
+          horaInicioVendedores[vendedor] = {
             lider: lider,
-            efectividadMensual: {},
-            efectividadSemanal: {},
+            horaMensual: {},
+            horaSemanal: {},
             conteoMensual: {}, // Contador de registros por mes
             conteoSemanal: {}  // Contador de registros por semana
           };
         }
-  
-        // Acumulación de la efectividad de ventas mensual
-        if (!efectividadVendedores[vendedor].efectividadMensual[mes]) {
-          efectividadVendedores[vendedor].efectividadMensual[mes] = 0;
-          efectividadVendedores[vendedor].conteoMensual[mes] = 0;
+
+        // Acumulación de la hora de inicio mensual
+        if (!horaInicioVendedores[vendedor].horaMensual[mes]) {
+          horaInicioVendedores[vendedor].horaMensual[mes] = 0;
+          horaInicioVendedores[vendedor].conteoMensual[mes] = 0;
         }
-        efectividadVendedores[vendedor].efectividadMensual[mes] += efectividadVentas;
-        efectividadVendedores[vendedor].conteoMensual[mes] += 1;
-  
-        // Acumulación de la efectividad de ventas semanal
-        if (!efectividadVendedores[vendedor].efectividadSemanal[semana]) {
-          efectividadVendedores[vendedor].efectividadSemanal[semana] = 0;
-          efectividadVendedores[vendedor].conteoSemanal[semana] = 0;
+        horaInicioVendedores[vendedor].horaMensual[mes] += horaDecimal;
+        horaInicioVendedores[vendedor].conteoMensual[mes] += 1;
+
+        // Acumulación de la hora de inicio semanal
+        if (!horaInicioVendedores[vendedor].horaSemanal[semana]) {
+          horaInicioVendedores[vendedor].horaSemanal[semana] = 0;
+          horaInicioVendedores[vendedor].conteoSemanal[semana] = 0;
         }
-        efectividadVendedores[vendedor].efectividadSemanal[semana] += efectividadVentas;
-        efectividadVendedores[vendedor].conteoSemanal[semana] += 1;
+        horaInicioVendedores[vendedor].horaSemanal[semana] += horaDecimal;
+        horaInicioVendedores[vendedor].conteoSemanal[semana] += 1;
       });
-  
+
       // Calcular promedios
-      Object.keys(efectividadVendedores).forEach((vendedor) => {
+      Object.keys(horaInicioVendedores).forEach((vendedor) => {
         // Promedio mensual
-        Object.keys(efectividadVendedores[vendedor].efectividadMensual).forEach((mes) => {
-          let suma = efectividadVendedores[vendedor].efectividadMensual[mes];
-          let conteo = efectividadVendedores[vendedor].conteoMensual[mes];
-          efectividadVendedores[vendedor].efectividadMensual[mes] = suma / conteo;
+        Object.keys(horaInicioVendedores[vendedor].horaMensual).forEach((mes) => {
+          let suma = horaInicioVendedores[vendedor].horaMensual[mes];
+          let conteo = horaInicioVendedores[vendedor].conteoMensual[mes];
+          horaInicioVendedores[vendedor].horaMensual[mes] = suma / conteo;
         });
-  
+
         // Promedio semanal
-        Object.keys(efectividadVendedores[vendedor].efectividadSemanal).forEach((semana) => {
-          let suma = efectividadVendedores[vendedor].efectividadSemanal[semana];
-          let conteo = efectividadVendedores[vendedor].conteoSemanal[semana];
-          efectividadVendedores[vendedor].efectividadSemanal[semana] = suma / conteo;
+        Object.keys(horaInicioVendedores[vendedor].horaSemanal).forEach((semana) => {
+          let suma = horaInicioVendedores[vendedor].horaSemanal[semana];
+          let conteo = horaInicioVendedores[vendedor].conteoSemanal[semana];
+          horaInicioVendedores[vendedor].horaSemanal[semana] = suma / conteo;
         });
       });
-  
-      efectividadPorAgencia[agencia] = efectividadVendedores;
+
+      horaInicioPorAgencia[agencia] = horaInicioVendedores;
     });
-  
-    return efectividadPorAgencia;
+
+    return horaInicioPorAgencia;
   };
 
   const obtenerPeriodo = () => {
     if (!fechaSeleccionada || !(fechaSeleccionada instanceof Date)) {
       return "";
     }
-    return tipoSeleccionado === "efectividadMensual"
+    return tipoSeleccionado === "horaMensual"
       ? format(fechaSeleccionada, "yyyy-MM")
       : `${format(fechaSeleccionada, "yyyy")}-W${getISOWeek(fechaSeleccionada)}`;
   };
@@ -139,7 +147,7 @@ const GraficEfectividadVentas = () => {
 
     Object.entries(vendedores).forEach(([vendedor, info]) => {
       const lider = info.lider || "Sin Líder";
-      const efectividadVentas = info[tipoSeleccionado]?.[periodo] || 0;
+      const horaInicio = info[tipoSeleccionado]?.[periodo] || 0;
 
       // Si el checkbox correspondiente está desactivado, excluir al vendedor
       const ocultarVendedor =
@@ -151,8 +159,8 @@ const GraficEfectividadVentas = () => {
         (!filterInd && vendedor.includes("VeInd"));
 
       // Solo incluir vendedores que NO estén en la lista de ocultos
-      if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && efectividadVentas > 0) {
-        datosFinales.push({ vendedor, efectividadVentas });
+      if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && horaInicio > 0) {
+        datosFinales.push({ vendedor, horaInicio });
       }
     });
 
@@ -203,8 +211,8 @@ const GraficEfectividadVentas = () => {
                 value={tipoSeleccionado}
                 onChange={(e) => setTipoSeleccionado(e.target.value)}
               >
-                <MenuItem value="efectividadMensual">Mensual</MenuItem>
-                <MenuItem value="efectividadSemanal">Semanal</MenuItem>
+                <MenuItem value="horaMensual">Mensual</MenuItem>
+                <MenuItem value="horaSemanal">Semanal</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -213,12 +221,12 @@ const GraficEfectividadVentas = () => {
         {/* Fila para la Fecha */}
         <TextField
           fullWidth
-          type={tipoSeleccionado === "efectividadMensual" ? "month" : "date"}
+          type={tipoSeleccionado === "horaMensual" ? "month" : "date"}
           label="Fecha"
-          value={fechaSeleccionada ? format(fechaSeleccionada, tipoSeleccionado === "efectividadMensual" ? "yyyy-MM" : "yyyy-MM-dd") : ""}
+          value={fechaSeleccionada ? format(fechaSeleccionada, tipoSeleccionado === "horaMensual" ? "yyyy-MM" : "yyyy-MM-dd") : ""}
           onChange={(e) => {
             const fecha = e.target.value;
-            const fechaObj = tipoSeleccionado === "efectividadMensual"
+            const fechaObj = tipoSeleccionado === "horaMensual"
               ? parseISO(`${fecha}-01`)
               : parseISO(fecha);
             setFechaSeleccionada(fechaObj);
@@ -255,18 +263,18 @@ const GraficEfectividadVentas = () => {
               padding={{ left: 10, right: 10 }}
             />
             <YAxis
-              tickFormatter={(tick) => `${tick.toLocaleString()}%`}
-              domain={[0, 100]}
+              tickFormatter={(tick) => convertirDecimalAHora(tick)} // Mostrar la hora en formato HH:mm:ss
+              domain={[0, 24]} // Rango de horas (0 a 24)
               tick={{ fontSize: isMobile ? 8 : 10 }}
             />
-            <Tooltip formatter={(value) => `${value.toLocaleString()}%`} />
+            <Tooltip formatter={(value) => convertirDecimalAHora(value)} />
             <Legend
               layout={window.innerWidth < 600 ? 'horizontal' : 'vertical'}
               align={window.innerWidth < 600 ? 'center' : 'right'}
               verticalAlign={window.innerWidth < 600 ? 'bottom' : 'middle'}
               wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
             />
-            <Bar dataKey="efectividadVentas" name="Efectividad de Ventas (%)">
+            <Bar dataKey="horaInicio" name="Hora Inicio">
               {procesarDatos().datos.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
@@ -274,10 +282,10 @@ const GraficEfectividadVentas = () => {
                 />
               ))}
               <LabelList
-                dataKey="efectividadVentas"
+                dataKey="horaInicio"
                 position="center"
                 angle={-90}
-                formatter={(value) => `${value.toFixed(2)}%`}
+                formatter={(value) => convertirDecimalAHora(value)}
                 style={{ fontSize: isMobile ? 10 : 12, fill: "black" }}
               />
             </Bar>
@@ -288,4 +296,4 @@ const GraficEfectividadVentas = () => {
   );
 };
 
-export default GraficEfectividadVentas;
+export default GraficHoraInicio;
