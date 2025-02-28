@@ -155,7 +155,7 @@ const GraficEfectividadVentas = () => {
         datosFinales.push({ vendedor, efectividadVentas });
       }
     });
-
+    datosFinales.sort((a, b) => b.efectividadVentas - a.efectividadVentas);
     return { datos: datosFinales, lideres: Object.values(vendedores).map((v) => v.lider) };
   };
 

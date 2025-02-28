@@ -4,10 +4,10 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Labe
 import { FormControl, Select, MenuItem, InputLabel, Card, FormControlLabel, FormGroup, CardContent, Grid, TextField, Checkbox } from "@mui/material";
 import { format, getISOWeek, parseISO } from "date-fns";
 
-const GraficHoraInicio = () => {
+const GraficHorasTrabajadas = () => {
   const [data, setData] = useState({});
   const [agenciaSeleccionada, setAgenciaSeleccionada] = useState("");
-  const [tipoSeleccionado, setTipoSeleccionado] = useState("horaMensual");
+  const [tipoSeleccionado, setTipoSeleccionado] = useState("horasMensual");
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
   const [liderSeleccionado, setLiderSeleccionado] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -21,11 +21,11 @@ const GraficHoraInicio = () => {
     onValue(dbRef, (snapshot) => {
       if (snapshot.exists()) {
         let firebaseData = snapshot.val();
-        const horaInicioPorAgencia = calcularHoraInicioVisitas(firebaseData);
-        setData(horaInicioPorAgencia);
-        console.log("✅ Datos obtenidos (Hora Inicio):", horaInicioPorAgencia);
+        const horasTrabajadasPorAgencia = calcularHorasTrabajadas(firebaseData);
+        setData(horasTrabajadasPorAgencia);
+        console.log("✅ Datos obtenidos (Horas Trabajadas):", horasTrabajadasPorAgencia);
         
-        const primeraAgencia = Object.keys(horaInicioPorAgencia)[0] || "";
+        const primeraAgencia = Object.keys(horasTrabajadasPorAgencia)[0] || "";
         setAgenciaSeleccionada(primeraAgencia);
       }
     }, (error) => {
@@ -48,78 +48,79 @@ const GraficHoraInicio = () => {
     return `${String(horas).padStart(2, "0")}:${String(minutos).padStart(2, "0")}:${String(segundos).padStart(2, "0")}`;
   };
 
-  const calcularHoraInicioVisitas = (firebaseData) => {
-    let horaInicioPorAgencia = {};
+  const calcularHorasTrabajadas = (firebaseData) => {
+    let horasTrabajadasPorAgencia = {};
     Object.keys(firebaseData).forEach((agencia) => {
       let registros = firebaseData[agencia];
-      let horaInicioVendedores = {};
+      let horasTrabajadasVendedores = {};
 
       Object.values(registros).forEach((registro) => {
-        if (!registro["Fecha"] || !registro["Hora Incio_Primer Registro Visita"] || !registro["Vendedor "]) return;
+        if (!registro["Fecha"] || !registro["Hora Incio_Primer Registro Visita"] || !registro["Hora Fin_Ultimo Registro Visita"] || !registro["Vendedor "]) return;
 
         let fecha = new Date(registro["Fecha"]);
         let horaInicio = registro["Hora Incio_Primer Registro Visita"];
-        let horaDecimal = convertirHoraADecimal(horaInicio); // Convertir a horas decimales
+        let horaFin = registro["Hora Fin_Ultimo Registro Visita"];
+        let horasTrabajadas = convertirHoraADecimal(horaFin) - convertirHoraADecimal(horaInicio);
         let mes = format(fecha, "yyyy-MM");
         let semana = `${format(fecha, "yyyy")}-W${getISOWeek(fecha)}`;
         let vendedor = registro["Vendedor "].trim();
         let lider = registro["LIDER"] ? registro["LIDER"].trim() : "";
 
-        if (!horaInicioVendedores[vendedor]) {
-          horaInicioVendedores[vendedor] = {
+        if (!horasTrabajadasVendedores[vendedor]) {
+          horasTrabajadasVendedores[vendedor] = {
             lider: lider,
-            horaMensual: {},
-            horaSemanal: {},
+            horasMensual: {},
+            horasSemanal: {},
             conteoMensual: {}, // Contador de registros por mes
             conteoSemanal: {}  // Contador de registros por semana
           };
         }
 
-        // Acumulación de la hora de inicio mensual
-        if (!horaInicioVendedores[vendedor].horaMensual[mes]) {
-          horaInicioVendedores[vendedor].horaMensual[mes] = 0;
-          horaInicioVendedores[vendedor].conteoMensual[mes] = 0;
+        // Acumulación de las horas trabajadas mensual
+        if (!horasTrabajadasVendedores[vendedor].horasMensual[mes]) {
+          horasTrabajadasVendedores[vendedor].horasMensual[mes] = 0;
+          horasTrabajadasVendedores[vendedor].conteoMensual[mes] = 0;
         }
-        horaInicioVendedores[vendedor].horaMensual[mes] += horaDecimal;
-        horaInicioVendedores[vendedor].conteoMensual[mes] += 1;
+        horasTrabajadasVendedores[vendedor].horasMensual[mes] += horasTrabajadas;
+        horasTrabajadasVendedores[vendedor].conteoMensual[mes] += 1;
 
-        // Acumulación de la hora de inicio semanal
-        if (!horaInicioVendedores[vendedor].horaSemanal[semana]) {
-          horaInicioVendedores[vendedor].horaSemanal[semana] = 0;
-          horaInicioVendedores[vendedor].conteoSemanal[semana] = 0;
+        // Acumulación de las horas trabajadas semanal
+        if (!horasTrabajadasVendedores[vendedor].horasSemanal[semana]) {
+          horasTrabajadasVendedores[vendedor].horasSemanal[semana] = 0;
+          horasTrabajadasVendedores[vendedor].conteoSemanal[semana] = 0;
         }
-        horaInicioVendedores[vendedor].horaSemanal[semana] += horaDecimal;
-        horaInicioVendedores[vendedor].conteoSemanal[semana] += 1;
+        horasTrabajadasVendedores[vendedor].horasSemanal[semana] += horasTrabajadas;
+        horasTrabajadasVendedores[vendedor].conteoSemanal[semana] += 1;
       });
 
       // Calcular promedios
-      Object.keys(horaInicioVendedores).forEach((vendedor) => {
+      Object.keys(horasTrabajadasVendedores).forEach((vendedor) => {
         // Promedio mensual
-        Object.keys(horaInicioVendedores[vendedor].horaMensual).forEach((mes) => {
-          let suma = horaInicioVendedores[vendedor].horaMensual[mes];
-          let conteo = horaInicioVendedores[vendedor].conteoMensual[mes];
-          horaInicioVendedores[vendedor].horaMensual[mes] = suma / conteo;
+        Object.keys(horasTrabajadasVendedores[vendedor].horasMensual).forEach((mes) => {
+          let suma = horasTrabajadasVendedores[vendedor].horasMensual[mes];
+          let conteo = horasTrabajadasVendedores[vendedor].conteoMensual[mes];
+          horasTrabajadasVendedores[vendedor].horasMensual[mes] = suma / conteo;
         });
 
         // Promedio semanal
-        Object.keys(horaInicioVendedores[vendedor].horaSemanal).forEach((semana) => {
-          let suma = horaInicioVendedores[vendedor].horaSemanal[semana];
-          let conteo = horaInicioVendedores[vendedor].conteoSemanal[semana];
-          horaInicioVendedores[vendedor].horaSemanal[semana] = suma / conteo;
+        Object.keys(horasTrabajadasVendedores[vendedor].horasSemanal).forEach((semana) => {
+          let suma = horasTrabajadasVendedores[vendedor].horasSemanal[semana];
+          let conteo = horasTrabajadasVendedores[vendedor].conteoSemanal[semana];
+          horasTrabajadasVendedores[vendedor].horasSemanal[semana] = suma / conteo;
         });
       });
 
-      horaInicioPorAgencia[agencia] = horaInicioVendedores;
+      horasTrabajadasPorAgencia[agencia] = horasTrabajadasVendedores;
     });
 
-    return horaInicioPorAgencia;
+    return horasTrabajadasPorAgencia;
   };
 
   const obtenerPeriodo = () => {
     if (!fechaSeleccionada || !(fechaSeleccionada instanceof Date)) {
       return "";
     }
-    return tipoSeleccionado === "horaMensual"
+    return tipoSeleccionado === "horasMensual"
       ? format(fechaSeleccionada, "yyyy-MM")
       : `${format(fechaSeleccionada, "yyyy")}-W${getISOWeek(fechaSeleccionada)}`;
   };
@@ -147,7 +148,7 @@ const GraficHoraInicio = () => {
 
     Object.entries(vendedores).forEach(([vendedor, info]) => {
       const lider = info.lider || "Sin Líder";
-      const horaInicio = info[tipoSeleccionado]?.[periodo] || 0;
+      const horasTrabajadas = info[tipoSeleccionado]?.[periodo] || 0;
 
       // Si el checkbox correspondiente está desactivado, excluir al vendedor
       const ocultarVendedor =
@@ -159,11 +160,11 @@ const GraficHoraInicio = () => {
         (!filterInd && vendedor.includes("VeInd"));
 
       // Solo incluir vendedores que NO estén en la lista de ocultos
-      if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && horaInicio > 0) {
-        datosFinales.push({ vendedor, horaInicio });
+      if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && horasTrabajadas > 0) {
+        datosFinales.push({ vendedor, horasTrabajadas });
       }
     });
-    datosFinales.sort((a, b) => b.horaInicio - a.horaInicio);
+    datosFinales.sort((a, b) => b.horasTrabajadas - a.horasTrabajadas);
     return { datos: datosFinales, lideres: Object.values(vendedores).map((v) => v.lider) };
   };
 
@@ -211,8 +212,8 @@ const GraficHoraInicio = () => {
                 value={tipoSeleccionado}
                 onChange={(e) => setTipoSeleccionado(e.target.value)}
               >
-                <MenuItem value="horaMensual">Mensual</MenuItem>
-                <MenuItem value="horaSemanal">Semanal</MenuItem>
+                <MenuItem value="horasMensual">Mensual</MenuItem>
+                <MenuItem value="horasSemanal">Semanal</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -221,12 +222,12 @@ const GraficHoraInicio = () => {
         {/* Fila para la Fecha */}
         <TextField
           fullWidth
-          type={tipoSeleccionado === "horaMensual" ? "month" : "date"}
+          type={tipoSeleccionado === "horasMensual" ? "month" : "date"}
           label="Fecha"
-          value={fechaSeleccionada ? format(fechaSeleccionada, tipoSeleccionado === "horaMensual" ? "yyyy-MM" : "yyyy-MM-dd") : ""}
+          value={fechaSeleccionada ? format(fechaSeleccionada, tipoSeleccionado === "horasMensual" ? "yyyy-MM" : "yyyy-MM-dd") : ""}
           onChange={(e) => {
             const fecha = e.target.value;
-            const fechaObj = tipoSeleccionado === "horaMensual"
+            const fechaObj = tipoSeleccionado === "horasMensual"
               ? parseISO(`${fecha}-01`)
               : parseISO(fecha);
             setFechaSeleccionada(fechaObj);
@@ -264,7 +265,7 @@ const GraficHoraInicio = () => {
             />
             <YAxis
               tickFormatter={(tick) => convertirDecimalAHora(tick)} // Mostrar la hora en formato HH:mm:ss
-              domain={[0, 14]} // Rango de horas (0 a 24)
+              domain={[0, 10]} // Rango de horas (0 a 24)
               tick={{ fontSize: isMobile ? 8 : 10 }}
             />
             <Tooltip formatter={(value) => convertirDecimalAHora(value)} />
@@ -274,7 +275,7 @@ const GraficHoraInicio = () => {
               verticalAlign={window.innerWidth < 600 ? 'bottom' : 'middle'}
               wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
             />
-            <Bar dataKey="horaInicio" name="Hora Inicio">
+            <Bar dataKey="horasTrabajadas" name="Horas Trabajadas">
               {procesarDatos().datos.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
@@ -282,7 +283,7 @@ const GraficHoraInicio = () => {
                 />
               ))}
               <LabelList
-                dataKey="horaInicio"
+                dataKey="horasTrabajadas"
                 position="center"
                 angle={-90}
                 formatter={(value) => convertirDecimalAHora(value)}
@@ -296,4 +297,4 @@ const GraficHoraInicio = () => {
   );
 };
 
-export default GraficHoraInicio;
+export default GraficHorasTrabajadas;

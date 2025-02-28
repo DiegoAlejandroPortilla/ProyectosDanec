@@ -5,7 +5,7 @@ import { Card, CardContent, Grid, TextField, FormControl, InputLabel, Select, Me
 import { format, parseISO, isValid } from "date-fns";
 import { es } from "date-fns/locale"; // 🌍 Idioma Español
 
-const GraficHoraInicioLine = () => {
+const GraficClientesPlanificadosLine = () => {
     const [firebaseData, setFirebaseData] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
     const [selectedAgencia, setSelectedAgencia] = useState("");
@@ -36,12 +36,10 @@ const GraficHoraInicioLine = () => {
         let formattedData = [];
         Object.keys(data).forEach((agencia) => {
             Object.values(data[agencia]).forEach((entry) => {
-                if (entry.Fecha && entry["Hora Incio_Primer Registro Visita"]) {
+                if (entry.Fecha && entry["Clientes Planificados"]) {
                     let fecha = parseISO(entry.Fecha);
                     if (isValid(fecha)) {
-                        const horaInicio = entry["Hora Incio_Primer Registro Visita"];
-                        const [horas, minutos, segundos] = horaInicio.split(':').map(Number);
-                        const totalSegundos = horas * 3600 + minutos * 60 + segundos;
+                        const clientesPlanificados = parseInt(entry["Clientes Planificados"], 10); // Convertir a entero
 
                         formattedData.push({
                             Fecha: fecha.getTime(), // Convertir a timestamp numérico
@@ -49,7 +47,7 @@ const GraficHoraInicioLine = () => {
                             Vendedor: entry["Ruta "] || "Desconocido",
                             Lider: entry.LIDER || "Sin líder",
                             Agencia: agencia,
-                            HoraInicio: totalSegundos, // Convertir la hora a segundos
+                            ClientesPlanificados: clientesPlanificados, // Usar el valor entero
                         });
                     }
                 }
@@ -89,17 +87,11 @@ const GraficHoraInicioLine = () => {
 
     const colores = ["#3b82f6", "#f87171", "#34d399", "#facc15", "#a78bfa", "#fb923c", "#22d3ee", "#f472b6"];
 
-    // Función para formatear los segundos a formato de hora
-    const formatSecondsToTime = (seconds) => {
-        const horas = Math.floor(seconds / 3600);
-        const minutos = Math.floor((seconds % 3600) / 60);
-        const segundosRestantes = seconds % 60;
-        return `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segundosRestantes).padStart(2, '0')}`;
-    };
-
     return (
         <Card sx={{ p: { xs: 1, sm: 3 }, maxWidth: '100%' }}>
             <CardContent>
+                
+
                 {/* Filtros */}
                 <Grid container spacing={2} className="grafica-filtros" direction={{ xs: 'column', sm: 'row' }}>
                     <Grid item xs={12} sm={6} md={3}>
@@ -176,11 +168,10 @@ const GraficHoraInicioLine = () => {
                             tickFormatter={(tick) => format(new Date(tick), "dd/MM/yyyy")}
                         />
                         <YAxis
-                            domain={[18000, 50400]} // Rango de 5:00 AM a 2:00 PM en segundos
-                            tickFormatter={(tick) => formatSecondsToTime(tick)} // Formatear los segundos a hora
+                            domain={[0, 'dataMax']} // Rango dinámico basado en los datos
                         />
                         <Tooltip
-                            formatter={(value) => formatSecondsToTime(value)} // Mostrar la hora en el tooltip
+                            formatter={(value) => value} // Mostrar el valor entero en el tooltip
                             labelFormatter={(label) => {
                                 const fecha = new Date(label);
                                 return format(fecha, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: es });
@@ -198,7 +189,7 @@ const GraficHoraInicioLine = () => {
                             <Line
                                 key={vendedor}
                                 type="monotone"
-                                dataKey="HoraInicio"
+                                dataKey="ClientesPlanificados"
                                 data={filteredData.filter(d => d.Vendedor === vendedor)}
                                 name={vendedor}
                                 stroke={colores[index % colores.length]}
@@ -213,4 +204,4 @@ const GraficHoraInicioLine = () => {
     );
 };
 
-export default GraficHoraInicioLine;
+export default GraficClientesPlanificadosLine;

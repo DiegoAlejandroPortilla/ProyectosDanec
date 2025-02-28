@@ -5,7 +5,7 @@ import { Card, CardContent, Grid, TextField, FormControl, InputLabel, Select, Me
 import { format, parseISO, isValid } from "date-fns";
 import { es } from "date-fns/locale"; // 🌍 Idioma Español
 
-const GraficHoraInicioLine = () => {
+const GraficHoraFinLine = () => {
     const [firebaseData, setFirebaseData] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
     const [selectedAgencia, setSelectedAgencia] = useState("");
@@ -36,11 +36,11 @@ const GraficHoraInicioLine = () => {
         let formattedData = [];
         Object.keys(data).forEach((agencia) => {
             Object.values(data[agencia]).forEach((entry) => {
-                if (entry.Fecha && entry["Hora Incio_Primer Registro Visita"]) {
+                if (entry.Fecha && entry["Hora Fin_Ultimo Registro Visita"]) {
                     let fecha = parseISO(entry.Fecha);
                     if (isValid(fecha)) {
-                        const horaInicio = entry["Hora Incio_Primer Registro Visita"];
-                        const [horas, minutos, segundos] = horaInicio.split(':').map(Number);
+                        const horaFin = entry["Hora Fin_Ultimo Registro Visita"];
+                        const [horas, minutos, segundos] = horaFin.split(':').map(Number);
                         const totalSegundos = horas * 3600 + minutos * 60 + segundos;
 
                         formattedData.push({
@@ -49,7 +49,7 @@ const GraficHoraInicioLine = () => {
                             Vendedor: entry["Ruta "] || "Desconocido",
                             Lider: entry.LIDER || "Sin líder",
                             Agencia: agencia,
-                            HoraInicio: totalSegundos, // Convertir la hora a segundos
+                            HoraFin: totalSegundos, // Convertir la hora a segundos
                         });
                     }
                 }
@@ -176,7 +176,7 @@ const GraficHoraInicioLine = () => {
                             tickFormatter={(tick) => format(new Date(tick), "dd/MM/yyyy")}
                         />
                         <YAxis
-                            domain={[18000, 50400]} // Rango de 5:00 AM a 2:00 PM en segundos
+                            domain={[43200, 64800]}
                             tickFormatter={(tick) => formatSecondsToTime(tick)} // Formatear los segundos a hora
                         />
                         <Tooltip
@@ -198,7 +198,7 @@ const GraficHoraInicioLine = () => {
                             <Line
                                 key={vendedor}
                                 type="monotone"
-                                dataKey="HoraInicio"
+                                dataKey="HoraFin"
                                 data={filteredData.filter(d => d.Vendedor === vendedor)}
                                 name={vendedor}
                                 stroke={colores[index % colores.length]}
@@ -213,4 +213,4 @@ const GraficHoraInicioLine = () => {
     );
 };
 
-export default GraficHoraInicioLine;
+export default GraficHoraFinLine;

@@ -3,6 +3,7 @@ import { database, ref, onValue } from "../firebaseConfig";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LabelList, Cell } from "recharts";
 import { FormControl, Select, MenuItem, InputLabel, Card, FormControlLabel, FormGroup, CardContent, Grid, TextField, Checkbox } from "@mui/material";
 import { format, getISOWeek, parseISO } from "date-fns";
+import { da } from "date-fns/locale";
 
 const GraficEfectividadVisitas = () => {
   const [data, setData] = useState({});
@@ -148,7 +149,7 @@ const GraficEfectividadVisitas = () => {
         datosFinales.push({ vendedor, efectividadVisitas });
       }
     });
-
+    datosFinales.sort((a, b) => b.efectividadVisitas - a.efectividadVisitas);
     return { datos: datosFinales, lideres: Object.values(vendedores).map((v) => v.lider) };
   };
 

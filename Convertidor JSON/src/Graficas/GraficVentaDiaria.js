@@ -33,6 +33,25 @@ const GraficVentaDiaria = () => {
     });
   }, []);
 
+  const calcularPromedios = (ventasVendedores) => {
+    Object.keys(ventasVendedores).forEach((vendedor) => {
+      const info = ventasVendedores[vendedor];
+
+      // Calcular promedio mensual
+      Object.keys(info.totalMensual).forEach((mes) => {
+        const totalMensual = info.totalMensual[mes];
+        const diasEnMes = new Date(mes.split('-')[0], mes.split('-')[1], 0).getDate();
+        info.totalMensual[mes] = totalMensual / diasEnMes;
+      });
+
+      // Calcular promedio semanal
+      Object.keys(info.totalSemanal).forEach((semana) => {
+        const totalSemanal = info.totalSemanal[semana];
+        info.totalSemanal[semana] = totalSemanal / 7; // Asumiendo que la semana tiene 7 días
+      });
+    });
+  };
+
   const calcularVentasTotales = (firebaseData) => {
     let ventasPorAgencia = {};
     Object.keys(firebaseData).forEach((agencia) => {
@@ -67,6 +86,7 @@ const GraficVentaDiaria = () => {
         ventasVendedores[vendedor].totalSemanal[semana] += ventas;
       });
 
+      calcularPromedios(ventasVendedores); // Calcular promedios
       ventasPorAgencia[agencia] = ventasVendedores;
     });
 
@@ -98,35 +118,33 @@ const GraficVentaDiaria = () => {
 
   const procesarDatos = () => {
     if (!data[agenciaSeleccionada]) return { datos: [], lideres: [] };
-  
+
     const vendedores = data[agenciaSeleccionada];
     const periodo = obtenerPeriodo();
     let datosFinales = [];
-  
+
     Object.entries(vendedores).forEach(([vendedor, info]) => {
       const lider = info.lider || "Sin Líder";
       const ventas = info[tipoSeleccionado]?.[periodo] || 0;
-  
+
       // Si el checkbox correspondiente está desactivado, excluir al vendedor
       const ocultarVendedor =
         (!filterCob && vendedor.includes("VeCob")) ||
         (!filterMay && vendedor.includes("VeMay")) ||
-        (!filterHorPan && vendedor.includes("VePan")) ||
-        (!filterHorPan && vendedor.includes("VeHor")) ||
-        (!filterMay && vendedor.includes("EsMay"))||
+        (!filterHorPan && (vendedor.includes("VePan") || vendedor.includes("VeHor"))) ||
+        (!filterMay && vendedor.includes("EsMay")) ||
         (!filterInd && vendedor.includes("VeInd"));
-  
+
       // Solo incluir vendedores que NO estén en la lista de ocultos
       if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && ventas > 0) {
         datosFinales.push({ vendedor, ventas });
       }
     });
-  
+// Ordenar de mayor a menor por ventas
+datosFinales.sort((a, b) => b.ventas - a.ventas);
     return { datos: datosFinales, lideres: Object.values(vendedores).map((v) => v.lider) };
   };
-  
-  
-  
+
   return (
     <Card sx={{ mt: 3, p: 2, maxWidth: "100%" }}>
       <CardContent>
@@ -179,37 +197,36 @@ const GraficVentaDiaria = () => {
         </Grid>
 
         {/* Fila para la Fecha */}
-            <TextField
-              fullWidth
-              type={tipoSeleccionado === "promedioMensual" ? "month" : "date"}
-              label="Fecha"
-              value={fechaSeleccionada ? format(fechaSeleccionada, tipoSeleccionado === "promedioMensual" ? "yyyy-MM" : "yyyy-MM-dd") : ""}
-              onChange={(e) => {
-                const fecha = e.target.value;
-                const fechaObj = tipoSeleccionado === "promedioMensual"
-                  ? parseISO(`${fecha}-01`)
-                  : parseISO(fecha);
-                setFechaSeleccionada(fechaObj);
-              }}
-              InputLabelProps={{
-                shrink: true,
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '4px',
-                  border: '1px solid #ccc',
-                  backgroundColor: '#f9f9f9',
-                  '&:hover': {
-                    borderColor: '#3f51b5',
-                  },
-                  '&.Mui-focused': {
-                    borderColor: '#3f51b5',
-                    boxShadow: '0 0 5px rgba(0, 37, 248, 0.5)',
-                  },
-                },
-              }}
-            />
-
+        <TextField
+          fullWidth
+          type={tipoSeleccionado === "totalMensual" ? "month" : "date"}
+          label="Fecha"
+          value={fechaSeleccionada ? format(fechaSeleccionada, tipoSeleccionado === "totalMensual" ? "yyyy-MM" : "yyyy-MM-dd") : ""}
+          onChange={(e) => {
+            const fecha = e.target.value;
+            const fechaObj = tipoSeleccionado === "totalMensual"
+              ? parseISO(`${fecha}-01`)
+              : parseISO(fecha);
+            setFechaSeleccionada(fechaObj);
+          }}
+          InputLabelProps={{
+            shrink: true,
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              borderRadius: '4px',
+              border: '1px solid #ccc',
+              backgroundColor: '#f9f9f9',
+              '&:hover': {
+                borderColor: '#3f51b5',
+              },
+              '&.Mui-focused': {
+                borderColor: '#3f51b5',
+                boxShadow: '0 0 5px rgba(0, 37, 248, 0.5)',
+              },
+            },
+          }}
+        />
 
         {/* Checkboxes centrados */}
         <Grid container justifyContent="center" sx={{ mt: 2 }}>

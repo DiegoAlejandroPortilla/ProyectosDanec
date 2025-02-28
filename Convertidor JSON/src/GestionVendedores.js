@@ -134,6 +134,7 @@ const ExcelReader = () => {
                     if (programado === "FUERA DE RUTA") {
                         vendedores[key].totalFueraDeRuta += parseFloat(Total) || 0;
                         vendedores[key].cantidadFueraDeRuta += 1;
+                        
                     } else {
                         vendedores[key].clientesProcesados.add(clientKey);
                     }
@@ -171,7 +172,7 @@ const ExcelReader = () => {
                             vendedor.Clientes_Sin_Venta.add(cliente);
                         }
                     });
-
+                    
                     // **Cálculo de visitas efectivas**
                     Object.values(vendedores).forEach(vendedor => {
                         const visitasEfectivas = Array.from(vendedor.registrosEfectividad.values()).filter(value => value > 0).length;
@@ -180,40 +181,40 @@ const ExcelReader = () => {
                             ? ((visitasEfectivas / vendedor.planificados) * 100).toFixed(2) + "%"
                             : "S/P";
                     });
+                    console.log(`Vendedor: ${vendedor.Vendedor}`);
 
                     vendedor.cumplimientoRuta = vendedor.planificados > 0
                         ? (((vendedor.Clientes_Con_Venta.size + vendedor.Clientes_Sin_Venta.size) / vendedor.planificados) * 100).toFixed(2) + "%"
                         : "S/P";
                 });
-
+                
                 // **Conversión final de datos**
-                const processedData = Object.values(vendedores).map(vendedor => ({
-                    ...vendedor,
-
-                    cumplimientoRuta: vendedor.planificados > 0
-                        ? (Math.min(((vendedor.Clientes_Con_Venta.size + vendedor.Clientes_Sin_Venta.size) / vendedor.planificados) * 100, 100)).toFixed(2) + "%"
-                        : "S/P",
-                    ticketPromedio: vendedor.Clientes_Con_Venta.size > 0
-                        ? "$" + (vendedor.totalVentas / vendedor.Clientes_Con_Venta.size).toFixed(2)
-                        : "$0.00",
-                    tiempoPromedioVisitas: vendedor.cantidadVisitas > 0
-                        ? formatTime(vendedor.tiempoTotalVisitas / vendedor.cantidadVisitas)
-                        : "00:00:00",
-                    efectividadVentas: vendedor.planificados > 0
-                        ? ((parseFloat(vendedor.Clientes_Con_Venta.size) / parseFloat(vendedor.planificados)) * 100).toFixed(2) + "%"
-                        : "S/P",
-
-
-                    valorPorCliente: vendedor.clientesProcesados.size > 0
-                        ? "$" + (vendedor.totalVentas / vendedor.clientesProcesados.size).toFixed(2)
-                        : "$0.00",
-
-
-                    clientessinVisitayVenta: ((vendedor.Clientes_Con_Venta.size + vendedor.Clientes_Sin_Venta.size) - vendedor.planificados),
-
-
-                    valorTotalFueraRuta: "$" + vendedor.totalFueraDeRuta.toFixed(2)
-                }));
+                const processedData = Object.values(vendedores).map(vendedor => {
+                    const totalClientes = Number(vendedor.Clientes_Con_Venta.size) + Number(vendedor.cantidadFueraDeRuta);
+                
+                    return {
+                        ...vendedor,
+                        totalClientes,
+                        cumplimientoRuta: vendedor.planificados > 0
+                            ? (Math.min(((vendedor.Clientes_Con_Venta.size + vendedor.Clientes_Sin_Venta.size) / vendedor.planificados) * 100, 100)).toFixed(2) + "%"
+                            : "S/P",
+                        ticketPromedio: totalClientes > 0
+                            ? "$" + (vendedor.totalVentas / totalClientes).toFixed(2)
+                            : "$0.00",
+                        tiempoPromedioVisitas: vendedor.cantidadVisitas > 0
+                            ? formatTime(vendedor.tiempoTotalVisitas / vendedor.cantidadVisitas)
+                            : "00:00:00",
+                        efectividadVentas: vendedor.planificados > 0
+                            ? ((parseFloat(vendedor.Clientes_Con_Venta.size) / parseFloat(vendedor.planificados)) * 100).toFixed(2) + "%"
+                            : "S/P",
+                        valorPorCliente: vendedor.clientesProcesados.size > 0
+                            ? "$" + (vendedor.totalVentas / vendedor.clientesProcesados.size).toFixed(2)
+                            : "$0.00",
+                        clientessinVisitayVenta: ((vendedor.Clientes_Con_Venta.size + vendedor.Clientes_Sin_Venta.size) - vendedor.planificados),
+                        valorTotalFueraRuta: "$" + vendedor.totalFueraDeRuta.toFixed(2)
+                    };
+                });
+                
 
                 setData(processedData);
             } catch (error) {
@@ -292,7 +293,7 @@ const ExcelReader = () => {
                             <StyledTableCell>Vendedor</StyledTableCell>
                             <StyledTableCell>Planificados</StyledTableCell>
                             <StyledTableCell>Cumplimiento Ruta</StyledTableCell>
-                            <StyledTableCell>Efectividad Visitas</StyledTableCell>
+                            <StyledTableCell>Efectividad Visitas (70 m)</StyledTableCell>
                             <StyledTableCell>Efectividad de Ventas</StyledTableCell>
                             <StyledTableCell>Valor Total</StyledTableCell>
                             <StyledTableCell>Valor Total FUERA DE RUTA</StyledTableCell>

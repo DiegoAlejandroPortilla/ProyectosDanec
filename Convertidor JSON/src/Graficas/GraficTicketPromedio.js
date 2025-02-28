@@ -147,7 +147,7 @@ const GraficTicketPromedio = () => {
         datosFinales.push({ vendedor, ticketPromedio });
       }
     });
-  
+    datosFinales.sort((a, b) => b.ticketPromedio - a.ticketPromedio);
     return { datos: datosFinales, lideres: Object.values(vendedores).map((v) => v.lider) };
   };
   
