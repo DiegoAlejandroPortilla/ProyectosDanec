@@ -25,6 +25,9 @@ import GraficaHorasTrabajadas from "./Graficas/HorasTrabajadas";
 import GraficHorasTrabajadasLine from "./Graficas/HorasTrabajadasLine";
 import GraficClientesPlanificados from "./Graficas/ClientesPlanificados";
 import GraficClientesPlanificadosLine from "./Graficas/ClientesPlanificadosLine";
+import GraficTiempoPromedioVisitas from "./Graficas/TiempoPromedioVisitas";
+import GraficTiempoPromedioVisitasLine from "./Graficas/TiempoPromedioVisitasLine";
+
 const ExcelUploader = () => {
   const [file, setFile] = useState(null);
   const [excelData, setExcelData] = useState({});
@@ -49,7 +52,8 @@ const ExcelUploader = () => {
   const [maximizedHorasTrabajadasLine, setMaximizedHorasTrabajadasLine] = useState(false);
   const [maximizedClientesPlanificados, setMaximizedClientesPlanificados] = useState(false);
   const [maximizedClientesPlanificadosLine, setMaximizedClientesPlanificadosLine] = useState(false);
-
+  const [maximizedTiempoPromedioVisitas, setMaximizedTiempoPromedioVisitas] = useState(false);
+  const [maximizedTiempoPromedioVisitasLine, setMaximizedTiempoPromedioVisitasLine] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -1294,6 +1298,100 @@ const ExcelUploader = () => {
           </motion.div>
         </Grid>
       </Grid>
+
+{/* Tiempo promedio de visitas*/}
+<Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
+        <Grid
+          item
+          xs={12}
+          sm={isMobile ? 12 : (maximizedTiempoPromedioVisitas ? 12 : 6)}
+          sx={{
+            display:
+              isMobile || // Mostrar siempre en móvil
+                (!maximizedTiempoPromedioVisitas && !maximizedTiempoPromedioVisitasLine) || // Mostrar si ninguna está maximizada
+                maximizedTiempoPromedioVisitas // Mostrar si esta gráfica está maximizada
+                ? "block"
+                : "none",
+          }}
+        >
+          <AnimatePresence>
+            <motion.div
+              key="grafica-TiempoPromedioVisitas"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+              style={{ height: "100%" }}
+            >
+              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
+                {!isMobile && (
+                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
+                    <IconButton
+                      size="small"
+                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
+                      onClick={() => {
+                        setMaximizedTiempoPromedioVisitas(!maximizedTiempoPromedioVisitas);
+                        setMaximizedTiempoPromedioVisitasLine(false); // Ocultar la otra gráfica al maximizar esta
+                      }}
+                    >
+                      {maximizedTiempoPromedioVisitas ? <Remove fontSize="small" /> : <Add fontSize="small" />}
+                    </IconButton>
+                  </Box>
+                )}
+                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <Typography variant="h6" align="center">Gráfica de Promedio de Tiempo de Visitas</Typography>
+                  <GraficTiempoPromedioVisitas />
+                </CardContent>
+              </Card>
+            </motion.div>
+          </AnimatePresence>
+        </Grid>
+
+        {/* Octava Grafica */}
+        <Grid
+          item
+          xs={12}
+          sm={isMobile ? 12 : (maximizedTiempoPromedioVisitasLine ? 12 : 6)}
+          sx={{
+            display:
+              isMobile || // Mostrar siempre en móvil
+                (!maximizedTiempoPromedioVisitas && !maximizedTiempoPromedioVisitasLine) || // Mostrar si ninguna está maximizada
+                maximizedTiempoPromedioVisitasLine // Mostrar si esta gráfica está maximizada
+                ? "block"
+                : "none",
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.3 }}
+            style={{ height: "100%" }}
+          >
+            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
+              {!isMobile && (
+                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
+                  <IconButton
+                    size="small"
+                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
+                    onClick={() => {
+                      setMaximizedTiempoPromedioVisitasLine(!maximizedTiempoPromedioVisitasLine);
+                      setMaximizedTiempoPromedioVisitas(false); // Ocultar la otra gráfica al maximizar esta
+                    }}
+                  >
+                    {maximizedTiempoPromedioVisitasLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
+                  </IconButton>
+                </Box>
+              )}
+              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <Typography variant="h6" align="center">Gráfica de Tiempo de Visitas (Diario)</Typography>
+                <GraficTiempoPromedioVisitasLine />
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+      </Grid>
+
 
  {/* Clientes Planificados*/}
  <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
