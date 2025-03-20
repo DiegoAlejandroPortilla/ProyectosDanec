@@ -36,7 +36,6 @@ const GraficEfectividadVentasLine = () => {
     
         Object.keys(data).forEach((agencia) => {
             Object.values(data[agencia]).forEach((entry) => {
-                // Buscar claves exactas con espacios
                 let efectividadKey = Object.keys(entry).find(key => key.trim() === "Efectividad de Ventas");
                 let vendedorKey = Object.keys(entry).find(key => key.trim() === "Ruta");
     
@@ -45,13 +44,20 @@ const GraficEfectividadVentasLine = () => {
                     if (isValid(fecha)) {
                         let efectividadValor = entry[efectividadKey];
     
-                        // Asegurarse de que es un string antes de aplicar replace()
+                        // Convertir a número y normalizar a porcentaje
                         let efectividadVentas = 0;
                         if (typeof efectividadValor === "string") {
-                            efectividadVentas = parseFloat(efectividadValor.replace("%", "")) || 0;
-                        } else if (typeof efectividadValor === "number") {
-                            efectividadVentas = efectividadValor; // Si ya es número, usarlo directamente
+                            efectividadValor = efectividadValor.replace("%", "").trim();
                         }
+                        efectividadVentas = parseFloat(efectividadValor);
+    
+                        // Si el número está entre 0 y 1, convertirlo a porcentaje
+                        if (efectividadVentas <= 1) {
+                            efectividadVentas *= 100;
+                        }
+    
+                        // 🔹 Asegurar que el valor tenga solo 2 decimales
+                        efectividadVentas = parseFloat(efectividadVentas.toFixed(2));
     
                         formattedData.push({
                             Fecha: fecha.getTime(), // Convertir a timestamp numérico
@@ -59,7 +65,7 @@ const GraficEfectividadVentasLine = () => {
                             Vendedor: entry[vendedorKey] || "Desconocido",
                             Lider: entry.LIDER || "Sin líder",
                             Agencia: agencia,
-                            EfectividadVentas: efectividadVentas,
+                            EfectividadVentas: efectividadVentas, // Siempre en porcentaje con 2 decimales
                         });
                     }
                 }
@@ -68,6 +74,8 @@ const GraficEfectividadVentasLine = () => {
     
         return formattedData.sort((a, b) => a.Fecha - b.Fecha); // Ordenar cronológicamente
     };
+    
+    
     
 
     useEffect(() => {
@@ -95,7 +103,7 @@ const GraficEfectividadVentasLine = () => {
         // Ordenar por fecha después de filtrar
         filtered.sort((a, b) => new Date(a.Fecha) - new Date(b.Fecha));
 
-        console.log("📊 Datos filtrados y ordenados:", filtered);
+        
         setFilteredData(filtered);
     }, [firebaseData, selectedAgencia, selectedLider, selectedVendedor, startDate, endDate, filterCob, filterMay, filterHorPan]);
 

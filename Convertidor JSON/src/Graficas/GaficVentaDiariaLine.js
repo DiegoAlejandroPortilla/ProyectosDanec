@@ -34,7 +34,7 @@ const GraficVentaDiaria = () => {
     let formattedData = [];
     Object.keys(data).forEach((agencia) => {
       Object.values(data[agencia]).forEach((entry) => {
-        if (entry.Fecha && entry["Avance de Ventas Totales "]) {
+        if (entry.Fecha && entry["Ventas Totales "]) {
           let fecha = parseISO(entry.Fecha);
           if (isValid(fecha)) {
             formattedData.push({
@@ -43,7 +43,7 @@ const GraficVentaDiaria = () => {
               Vendedor: entry["Ruta "] || "Desconocido",
               Lider: entry.LIDER || "Sin líder",
               Agencia: agencia,
-              Ventas: parseFloat(entry["Avance de Ventas Totales "]) || 0,
+              Ventas: parseFloat(entry["Ventas Totales "]) || 0,
             });
           }
         }
@@ -77,7 +77,7 @@ const GraficVentaDiaria = () => {
     // Ordenar por fecha después de filtrar
     filtered.sort((a, b) => new Date(a.Fecha) - new Date(b.Fecha));
 
-    console.log("📊 Datos filtrados y ordenados:", filtered);
+    
     setFilteredData(filtered);
   }, [firebaseData, selectedAgencia, selectedLider, selectedVendedor, startDate, endDate, filterCob, filterMay, filterHorPan]);
 

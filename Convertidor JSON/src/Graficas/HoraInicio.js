@@ -15,7 +15,7 @@ const GraficHoraInicio = () => {
   const [filterMay, setFilterMay] = useState(true);
   const [filterHorPan, setFilterHorPan] = useState(true);
   const [filterInd, setFilterInd] = useState(true);
-
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("");
   useEffect(() => {
     const dbRef = ref(database);
     onValue(dbRef, (snapshot) => {
@@ -23,8 +23,7 @@ const GraficHoraInicio = () => {
         let firebaseData = snapshot.val();
         const horaInicioPorAgencia = calcularHoraInicioVisitas(firebaseData);
         setData(horaInicioPorAgencia);
-        console.log("✅ Datos obtenidos (Hora Inicio):", horaInicioPorAgencia);
-        
+
         const primeraAgencia = Object.keys(horaInicioPorAgencia)[0] || "";
         setAgenciaSeleccionada(primeraAgencia);
       }
@@ -32,7 +31,7 @@ const GraficHoraInicio = () => {
       console.error("❌ Error al obtener datos:", error);
     });
   }, []);
-  
+
 
   // Convertir hora en formato "HH:mm:ss" a horas decimales (ej: "08:21:00" -> 8.35)
   const convertirHoraADecimal = (hora) => {
@@ -149,23 +148,24 @@ const GraficHoraInicio = () => {
       const lider = info.lider || "Sin Líder";
       const horaInicio = info[tipoSeleccionado]?.[periodo] || 0;
 
-      // Si el checkbox correspondiente está desactivado, excluir al vendedor
+      // 🔹 Filtrar vendedores según la categoría seleccionada en el ComboBox
       const ocultarVendedor =
-        (!filterCob && vendedor.includes("VeCob")) ||
-        (!filterMay && vendedor.includes("VeMay")) ||
-        (!filterHorPan && vendedor.includes("VePan")) ||
-        (!filterHorPan && vendedor.includes("VeHor")) ||
-        (!filterMay && vendedor.includes("EsMay")) ||
-        (!filterInd && vendedor.includes("VeInd"));
+        (categoriaSeleccionada === "COB" && !vendedor.includes("VeCob")) ||
+        (categoriaSeleccionada === "MAY" && !vendedor.includes("VeMay") && !vendedor.includes("EsMay")) ||
+        (categoriaSeleccionada === "HOR" && !vendedor.includes("VeHor")) ||
+        (categoriaSeleccionada === "PAN" && !vendedor.includes("VePan")) ||
+        (categoriaSeleccionada === "IND" && !vendedor.includes("VeInd"));
 
-      // Solo incluir vendedores que NO estén en la lista de ocultos
+      // Solo incluir vendedores que cumplen con el filtro de líder, categoría y hora de inicio mayor a 0
       if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && horaInicio > 0) {
         datosFinales.push({ vendedor, horaInicio });
       }
     });
-    datosFinales.sort((a, b) => b.horaInicio - a.horaInicio);
+
+    datosFinales.sort((a, b) => b.horaInicio - a.horaInicio); // Ordenar de mayor a menor
     return { datos: datosFinales, lideres: Object.values(vendedores).map((v) => v.lider) };
   };
+
 
   return (
     <Card sx={{ mt: 3, p: 2, maxWidth: "100%" }}>
@@ -188,7 +188,22 @@ const GraficHoraInicio = () => {
               </Select>
             </FormControl>
           </Grid>
-
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth>
+              <InputLabel>Canal</InputLabel>
+              <Select
+                value={categoriaSeleccionada}
+                onChange={(e) => setCategoriaSeleccionada(e.target.value)}
+              >
+                <MenuItem value="">Todos</MenuItem>
+                <MenuItem value="HOR">HOR</MenuItem>
+                <MenuItem value="COB">COB</MenuItem>
+                <MenuItem value="MAY">MAY</MenuItem>
+                <MenuItem value="PAN">PAN</MenuItem>
+                <MenuItem value="IND">IND</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
           <Grid item xs={12} sm={6} md={4}>
             <FormControl fullWidth>
               <InputLabel>Líder</InputLabel>
@@ -251,8 +266,8 @@ const GraficHoraInicio = () => {
         />
 
         {/* Gráfico de barras */}
-        <ResponsiveContainer width="100%" height={500}>
-          <BarChart data={procesarDatos().datos} margin={{ top: 20, bottom: 20 }}>
+        <ResponsiveContainer width="100%" height={600}>
+          <BarChart data={procesarDatos().datos} margin={{ top: 50, bottom: 20 }}>
             <XAxis
               dataKey="vendedor"
               angle={isMobile ? -90 : -90}
@@ -268,12 +283,7 @@ const GraficHoraInicio = () => {
               tick={{ fontSize: isMobile ? 8 : 10 }}
             />
             <Tooltip formatter={(value) => convertirDecimalAHora(value)} />
-            <Legend
-              layout={window.innerWidth < 600 ? 'horizontal' : 'vertical'}
-              align={window.innerWidth < 600 ? 'center' : 'right'}
-              verticalAlign={window.innerWidth < 600 ? 'bottom' : 'middle'}
-              wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
-            />
+
             <Bar dataKey="horaInicio" name="Hora Inicio">
               {procesarDatos().datos.map((entry, index) => (
                 <Cell

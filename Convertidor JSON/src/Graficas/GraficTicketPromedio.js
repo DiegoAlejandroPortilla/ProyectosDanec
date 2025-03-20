@@ -13,7 +13,8 @@ const GraficTicketPromedio = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [filterCob, setFilterCob] = useState(true);
   const [filterMay, setFilterMay] = useState(true);
-  const [filterHorPan, setFilterHorPan] = useState(true);
+  const [filterHor, setFilterHor] = useState(true);
+  const [filterPan, setFilterPan] = useState(true);
   const [filterInd, setFilterInd] = useState(true);
 
   useEffect(() => {
@@ -23,7 +24,6 @@ const GraficTicketPromedio = () => {
         let firebaseData = snapshot.val();
         const ticketsPorAgencia = calcularTicketsPromedio(firebaseData);
         setData(ticketsPorAgencia);
-        console.log("✅ Datos obtenidos ticket:", ticketsPorAgencia);
 
         if (ticketsPorAgencia["CUE"]) {
           setAgenciaSeleccionada("CUE");
@@ -137,8 +137,8 @@ const GraficTicketPromedio = () => {
       const ocultarVendedor =
         (!filterCob && vendedor.includes("VeCob")) ||
         (!filterMay && vendedor.includes("VeMay")) ||
-        (!filterHorPan && vendedor.includes("VePan")) ||
-        (!filterHorPan && vendedor.includes("VeHor")) ||
+        (!filterPan && vendedor.includes("VePan")) ||
+        (!filterHor && vendedor.includes("VeHor")) ||
         (!filterMay && vendedor.includes("EsMay"))||
         (!filterInd && vendedor.includes("VeInd"));
   
@@ -246,8 +246,12 @@ const GraficTicketPromedio = () => {
               label="MAY"
             />
             <FormControlLabel
-              control={<Checkbox checked={filterHorPan} onChange={(e) => setFilterHorPan(e.target.checked)} />}
-              label="HOR-PAN"
+              control={<Checkbox checked={filterHor} onChange={(e) => setFilterHor(e.target.checked)} />}
+              label="HOR"
+            />
+            <FormControlLabel
+              control={<Checkbox checked={filterPan} onChange={(e) => setFilterPan(e.target.checked)} />}
+              label="PAN"
             />
             <FormControlLabel
               control={<Checkbox checked={filterInd} onChange={(e) => setFilterInd(e.target.checked)} />}
@@ -257,8 +261,8 @@ const GraficTicketPromedio = () => {
         </Grid>
 
         {/* Gráfico de barras */}
-        <ResponsiveContainer width="100%" height={500}>
-          <BarChart data={procesarDatos().datos} margin={{ top: 20, bottom: 20 }}>
+        <ResponsiveContainer width="100%" height={600}>
+          <BarChart data={procesarDatos().datos} margin={{ top: 50, bottom: 20 }}>
             <XAxis
               dataKey="vendedor"
               angle={isMobile ? -90 : -90}
@@ -274,12 +278,7 @@ const GraficTicketPromedio = () => {
               tick={{ fontSize: isMobile ? 8 : 10 }}
             />
             <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
-            <Legend
-              layout={window.innerWidth < 600 ? 'horizontal' : 'vertical'}
-              align={window.innerWidth < 600 ? 'center' : 'right'}
-              verticalAlign={window.innerWidth < 600 ? 'bottom' : 'middle'}
-              wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
-            />
+           
             <Bar dataKey="ticketPromedio" name="Ticket Promedio ($)">
               {procesarDatos().datos.map((entry, index) => (
                 <Cell

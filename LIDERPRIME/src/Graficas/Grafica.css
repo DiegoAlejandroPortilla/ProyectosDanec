@@ -1,0 +1,9 @@
+/* En tu archivo Grafica.css */
+@media (max-width: 600px) {
+    .grafica-filtros {
+        flex-direction: column;
+    }
+    .grafica-filtros .MuiGrid-item {
+        width: 100%;
+    }
+}

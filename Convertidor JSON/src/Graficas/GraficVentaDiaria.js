@@ -3,6 +3,7 @@ import { database, ref, onValue } from "../firebaseConfig";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LabelList, Cell } from "recharts";
 import { FormControl, Select, MenuItem, InputLabel, Card, FormControlLabel, FormGroup, CardContent, Grid, TextField, Checkbox } from "@mui/material";
 import { format, getISOWeek, parseISO } from "date-fns";
+import { filter } from "jszip";
 
 const GraficVentaDiaria = () => {
   const [data, setData] = useState({});
@@ -13,8 +14,9 @@ const GraficVentaDiaria = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [filterCob, setFilterCob] = useState(true);
   const [filterMay, setFilterMay] = useState(true);
-  const [filterHorPan, setFilterHorPan] = useState(true);
+  const [filterHor, setFilterHor] = useState(true);
   const [filterInd, setFilterInd] = useState(true);
+  const [filterPan, setFilterPan] = useState(true);
 
   useEffect(() => {
     const dbRef = ref(database);
@@ -33,24 +35,49 @@ const GraficVentaDiaria = () => {
     });
   }, []);
 
-  const calcularPromedios = (ventasVendedores) => {
+  const calcularPromedios = (ventasVendedores, registros) => {
+    let diasConVentasPorMes = {}; // Guardará los días únicos con ventas por mes
+
+    Object.values(registros).forEach((registro) => {
+      if (!registro["Fecha"] || !registro["Vendedor "]) return;
+      let fecha = new Date(registro["Fecha"]);
+      let mes = format(fecha, "yyyy-MM");
+      let dia = format(fecha, "yyyy-MM-dd");
+      let vendedorRegistro = registro["Vendedor "].trim();
+
+      if (!diasConVentasPorMes[vendedorRegistro]) diasConVentasPorMes[vendedorRegistro] = {};
+      if (!diasConVentasPorMes[vendedorRegistro][mes]) diasConVentasPorMes[vendedorRegistro][mes] = new Set();
+
+      diasConVentasPorMes[vendedorRegistro][mes].add(dia); // Agregar día único de ventas
+    });
+
     Object.keys(ventasVendedores).forEach((vendedor) => {
       const info = ventasVendedores[vendedor];
 
-      // Calcular promedio mensual
+      // **Calcular promedio mensual**
       Object.keys(info.totalMensual).forEach((mes) => {
         const totalMensual = info.totalMensual[mes];
-        const diasEnMes = new Date(mes.split('-')[0], mes.split('-')[1], 0).getDate();
-        info.totalMensual[mes] = totalMensual / diasEnMes;
+
+        // Contar los días efectivos con ventas
+        const diasConVentas = diasConVentasPorMes[vendedor] && diasConVentasPorMes[vendedor][mes]
+          ? diasConVentasPorMes[vendedor][mes].size
+          : 1; // Evitar divisiones por 0
+
+        info.totalMensual[mes] = totalMensual / diasConVentas;
       });
 
-      // Calcular promedio semanal
+      // **Calcular promedio semanal**
       Object.keys(info.totalSemanal).forEach((semana) => {
         const totalSemanal = info.totalSemanal[semana];
-        info.totalSemanal[semana] = totalSemanal / 7; // Asumiendo que la semana tiene 7 días
+
+        const diasEnSemana = 7; // Opcional: puedes contar los días exactos con ventas en la semana
+
+        info.totalSemanal[semana] = totalSemanal / diasEnSemana;
       });
     });
   };
+
+
 
   const calcularVentasTotales = (firebaseData) => {
     let ventasPorAgencia = {};
@@ -59,13 +86,13 @@ const GraficVentaDiaria = () => {
       let ventasVendedores = {};
 
       Object.values(registros).forEach((registro) => {
-        if (!registro["Fecha"] || !registro["Avance de Ventas Totales "] || !registro["Vendedor "]) return;
+        if (!registro["Fecha"] || !registro["Ventas Totales "] || !registro["Vendedor "]) return;
         let fecha = new Date(registro["Fecha"]);
         let mes = format(fecha, "yyyy-MM");
         let semana = `${format(fecha, "yyyy")}-W${getISOWeek(fecha)}`;
         let vendedor = registro["Vendedor "].trim();
         let lider = registro["LIDER"] ? registro["LIDER"].trim() : "";
-        let ventas = parseFloat(registro["Avance de Ventas Totales "]) || 0;
+        let ventas = parseFloat(registro["Ventas Totales "]) || 0;
 
         if (!ventasVendedores[vendedor]) {
           ventasVendedores[vendedor] = {
@@ -86,12 +113,16 @@ const GraficVentaDiaria = () => {
         ventasVendedores[vendedor].totalSemanal[semana] += ventas;
       });
 
-      calcularPromedios(ventasVendedores); // Calcular promedios
+      // **Ahora pasamos los registros completos a calcularPromedios**
+      calcularPromedios(ventasVendedores, registros);
+
       ventasPorAgencia[agencia] = ventasVendedores;
     });
 
     return ventasPorAgencia;
   };
+
+
 
   const obtenerPeriodo = () => {
     if (!fechaSeleccionada || !(fechaSeleccionada instanceof Date)) {
@@ -125,25 +156,30 @@ const GraficVentaDiaria = () => {
 
     Object.entries(vendedores).forEach(([vendedor, info]) => {
       const lider = info.lider || "Sin Líder";
-      const ventas = info[tipoSeleccionado]?.[periodo] || 0;
 
+      // 🚨 Asegúrate de tomar el PROMEDIO calculado y no el total
+      const ventasPromedio = info[tipoSeleccionado]?.[periodo] || 0;
       // Si el checkbox correspondiente está desactivado, excluir al vendedor
       const ocultarVendedor =
         (!filterCob && vendedor.includes("VeCob")) ||
         (!filterMay && vendedor.includes("VeMay")) ||
-        (!filterHorPan && (vendedor.includes("VePan") || vendedor.includes("VeHor"))) ||
+        (!filterPan && vendedor.includes("VePan")) ||
+        (!filterHor && vendedor.includes("VeHor")) ||
         (!filterMay && vendedor.includes("EsMay")) ||
         (!filterInd && vendedor.includes("VeInd"));
 
       // Solo incluir vendedores que NO estén en la lista de ocultos
-      if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && ventas > 0) {
-        datosFinales.push({ vendedor, ventas });
+      if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && ventasPromedio > 0) {
+        datosFinales.push({ vendedor, ventas: ventasPromedio });
       }
+
     });
-// Ordenar de mayor a menor por ventas
-datosFinales.sort((a, b) => b.ventas - a.ventas);
+
+    datosFinales.sort((a, b) => b.ventas - a.ventas); // Ordenar de mayor a menor
     return { datos: datosFinales, lideres: Object.values(vendedores).map((v) => v.lider) };
   };
+
+
 
   return (
     <Card sx={{ mt: 3, p: 2, maxWidth: "100%" }}>
@@ -235,13 +271,18 @@ datosFinales.sort((a, b) => b.ventas - a.ventas);
               control={<Checkbox checked={filterCob} onChange={(e) => setFilterCob(e.target.checked)} />}
               label="COB"
             />
+            
+            <FormControlLabel
+              control={<Checkbox checked={filterHor} onChange={(e) => setFilterHor(e.target.checked)} />}
+              label="HOR"
+            />
+            <FormControlLabel
+              control={<Checkbox checked={filterPan} onChange={(e) => setFilterPan(e.target.checked)} />}
+              label="PAN"
+            />
             <FormControlLabel
               control={<Checkbox checked={filterMay} onChange={(e) => setFilterMay(e.target.checked)} />}
               label="MAY"
-            />
-            <FormControlLabel
-              control={<Checkbox checked={filterHorPan} onChange={(e) => setFilterHorPan(e.target.checked)} />}
-              label="HOR-PAN"
             />
             <FormControlLabel
               control={<Checkbox checked={filterInd} onChange={(e) => setFilterInd(e.target.checked)} />}
@@ -251,8 +292,8 @@ datosFinales.sort((a, b) => b.ventas - a.ventas);
         </Grid>
 
         {/* Gráfico de barras */}
-        <ResponsiveContainer width="100%" height={500}>
-          <BarChart data={procesarDatos().datos} margin={{ top: 20, bottom: 20 }}>
+        <ResponsiveContainer width="100%" height={600}>
+          <BarChart data={procesarDatos().datos} margin={{ top: 50, bottom: 20 }}>
             <XAxis
               dataKey="vendedor"
               angle={isMobile ? -90 : -90}
@@ -268,12 +309,7 @@ datosFinales.sort((a, b) => b.ventas - a.ventas);
               tick={{ fontSize: isMobile ? 8 : 10 }}
             />
             <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
-            <Legend
-              layout={window.innerWidth < 600 ? 'horizontal' : 'vertical'}
-              align={window.innerWidth < 600 ? 'center' : 'right'}
-              verticalAlign={window.innerWidth < 600 ? 'bottom' : 'middle'}
-              wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
-            />
+
             <Bar dataKey="ventas" name="Ventas Totales ($)">
               {procesarDatos().datos.map((entry, index) => (
                 <Cell

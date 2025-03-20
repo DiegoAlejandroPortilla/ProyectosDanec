@@ -16,7 +16,7 @@ const GraficEfectividadVisitas = () => {
   const [filterMay, setFilterMay] = useState(true);
   const [filterHorPan, setFilterHorPan] = useState(true);
   const [filterInd, setFilterInd] = useState(true);
-
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("Efectividad de Visitas");
   useEffect(() => {
     const dbRef = ref(database);
     onValue(dbRef, (snapshot) => {
@@ -24,7 +24,7 @@ const GraficEfectividadVisitas = () => {
         let firebaseData = snapshot.val();
         const efectividadPorAgencia = calcularEfectividadVisitas(firebaseData);
         setData(efectividadPorAgencia);
-        console.log("✅ Datos obtenidos efectividad:", efectividadPorAgencia);
+
 
         if (efectividadPorAgencia["CUE"]) {
           setAgenciaSeleccionada("CUE");
@@ -35,123 +35,148 @@ const GraficEfectividadVisitas = () => {
     });
   }, []);
 
+
   const calcularEfectividadVisitas = (firebaseData) => {
     let efectividadPorAgencia = {};
+
     Object.keys(firebaseData).forEach((agencia) => {
-      let registros = firebaseData[agencia];
-      let efectividadVendedores = {};
+      let vendedoresData = {};
 
-      Object.values(registros).forEach((registro) => {
-        if (!registro["Fecha"] || !registro["Efectividad de Visitas"] || !registro["Vendedor "]) return;
-
-        let fecha = new Date(registro["Fecha"]);
-        let mes = format(fecha, "yyyy-MM");
-        let semana = `${format(fecha, "yyyy")}-W${getISOWeek(fecha)}`;
-        let vendedor = registro["Vendedor "].trim();
-        let lider = registro["LIDER"] ? registro["LIDER"].trim() : "";
-        let efectividadVisitas = parseFloat(registro["Efectividad de Visitas"].replace("%", "")) || 0;
-
-        if (!efectividadVendedores[vendedor]) {
-          efectividadVendedores[vendedor] = {
-            lider: lider,
-            efectividadMensual: {},
-            efectividadSemanal: {},
-            conteoMensual: {}, // Contador de registros por mes
-            conteoSemanal: {}  // Contador de registros por semana
-          };
+      Object.values(firebaseData[agencia] || {}).forEach((registro) => {
+        if (!registro["Fecha"] || !registro["Vendedor "] || registro["Efectividad de Visitas (50 m)"] === "S/P") {
+          return;
         }
 
-        // Acumulación de la efectividad de visitas mensual
-        if (!efectividadVendedores[vendedor].efectividadMensual[mes]) {
-          efectividadVendedores[vendedor].efectividadMensual[mes] = 0;
-          efectividadVendedores[vendedor].conteoMensual[mes] = 0;
-        }
-        efectividadVendedores[vendedor].efectividadMensual[mes] += efectividadVisitas;
-        efectividadVendedores[vendedor].conteoMensual[mes] += 1;
+        const vendedor = registro["Vendedor "].trim();
+        const lider = registro["LIDER"] || "Sin Líder"; // Asume que el campo se llama "Líder"
+        const fecha = new Date(registro["Fecha"]);
+        if (isNaN(fecha.getTime())) return;
 
-        // Acumulación de la efectividad de visitas semanal
-        if (!efectividadVendedores[vendedor].efectividadSemanal[semana]) {
-          efectividadVendedores[vendedor].efectividadSemanal[semana] = 0;
-          efectividadVendedores[vendedor].conteoSemanal[semana] = 0;
+        const mes = fecha.getFullYear() + "-" + (fecha.getMonth() + 1);
+        const semana = `${fecha.getFullYear()}-W${getISOWeek(fecha)}`;
+
+        let efectividadVisitas = parseFloat(registro["Efectividad de Visitas (50 m)"]);
+        if (isNaN(efectividadVisitas)) return;
+
+        if (efectividadVisitas > 0 && efectividadVisitas <= 1) {
+          efectividadVisitas *= 100;
         }
-        efectividadVendedores[vendedor].efectividadSemanal[semana] += efectividadVisitas;
-        efectividadVendedores[vendedor].conteoSemanal[semana] += 1;
+
+        if (!vendedoresData[vendedor]) {
+          vendedoresData[vendedor] = { lider, semanal: {}, mensual: {} }; // Incluye el líder aquí
+        }
+
+        // Agrupar por Semana
+        if (!vendedoresData[vendedor].semanal[semana]) {
+          vendedoresData[vendedor].semanal[semana] = { suma: 0, conteo: 0 };
+        }
+        vendedoresData[vendedor].semanal[semana].suma += efectividadVisitas;
+        vendedoresData[vendedor].semanal[semana].conteo++;
+
+        // Agrupar por Mes
+        if (!vendedoresData[vendedor].mensual[mes]) {
+          vendedoresData[vendedor].mensual[mes] = { suma: 0, conteo: 0 };
+        }
+        vendedoresData[vendedor].mensual[mes].suma += efectividadVisitas;
+        vendedoresData[vendedor].mensual[mes].conteo++;
       });
 
-      // Calcular promedios
-      Object.keys(efectividadVendedores).forEach((vendedor) => {
-        // Promedio mensual
-        Object.keys(efectividadVendedores[vendedor].efectividadMensual).forEach((mes) => {
-          let suma = efectividadVendedores[vendedor].efectividadMensual[mes];
-          let conteo = efectividadVendedores[vendedor].conteoMensual[mes];
-          efectividadVendedores[vendedor].efectividadMensual[mes] = suma / conteo;
+      let efectividadMensual = [];
+      let efectividadSemanal = [];
+
+      Object.keys(vendedoresData).forEach((vendedor) => {
+        const lider = vendedoresData[vendedor].lider; // Obtén el líder
+
+        Object.keys(vendedoresData[vendedor].mensual).forEach((mes) => {
+          const { suma, conteo } = vendedoresData[vendedor].mensual[mes];
+          const promedio = conteo > 0 ? parseFloat((suma / conteo).toFixed(2)) : 0;
+          efectividadMensual.push({ vendedor, efectividad: promedio, periodo: `Mes ${mes}`, lider }); // Incluye el líder
         });
 
-        // Promedio semanal
-        Object.keys(efectividadVendedores[vendedor].efectividadSemanal).forEach((semana) => {
-          let suma = efectividadVendedores[vendedor].efectividadSemanal[semana];
-          let conteo = efectividadVendedores[vendedor].conteoSemanal[semana];
-          efectividadVendedores[vendedor].efectividadSemanal[semana] = suma / conteo;
+        Object.keys(vendedoresData[vendedor].semanal).forEach((semana) => {
+          const { suma, conteo } = vendedoresData[vendedor].semanal[semana];
+          const promedio = conteo > 0 ? parseFloat((suma / conteo).toFixed(2)) : 0;
+          efectividadSemanal.push({ vendedor, efectividad: promedio, periodo: `Semana ${semana}`, lider }); // Incluye el líder
         });
       });
 
-      efectividadPorAgencia[agencia] = efectividadVendedores;
+      efectividadPorAgencia[agencia] = { efectividadMensual, efectividadSemanal };
     });
 
     return efectividadPorAgencia;
   };
 
+
+
   const obtenerPeriodo = () => {
     if (!fechaSeleccionada || !(fechaSeleccionada instanceof Date)) {
       return "";
     }
-    return tipoSeleccionado === "efectividadMensual"
-      ? format(fechaSeleccionada, "yyyy-MM")
-      : `${format(fechaSeleccionada, "yyyy")}-W${getISOWeek(fechaSeleccionada)}`;
+  
+    const mes = fechaSeleccionada.getMonth() + 1; // getMonth() devuelve 0-11
+    const periodo = tipoSeleccionado === "efectividadMensual"
+      ? `Mes ${fechaSeleccionada.getFullYear()}-${mes}` // Formato: "Mes 2025-3"
+      : `Semana ${format(fechaSeleccionada, "yyyy")}-W${getISOWeek(fechaSeleccionada)}`; // Formato: "Semana 2025-W12"
+  
+    return periodo;
   };
 
   const obtenerLideresDeAgencia = () => {
     if (!data[agenciaSeleccionada]) return [];
-    const vendedores = data[agenciaSeleccionada];
+    const vendedores = data[agenciaSeleccionada].efectividadMensual; // Usa efectividadMensual o efectividadSemanal
     const lideresUnicos = new Set();
 
-    Object.values(vendedores).forEach((info) => {
-      if (info.lider) {
-        lideresUnicos.add(info.lider);
+    vendedores.forEach((item) => {
+      if (item.lider) {
+        lideresUnicos.add(item.lider);
       }
     });
 
     return Array.from(lideresUnicos);
   };
-
   const procesarDatos = () => {
-    if (!data[agenciaSeleccionada]) return { datos: [], lideres: [] };
-
-    const vendedores = data[agenciaSeleccionada];
+    if (!data[agenciaSeleccionada]) {
+      return { datos: [], lideres: [] };
+    }
+  
     const periodo = obtenerPeriodo();
     let datosFinales = [];
-
-    Object.entries(vendedores).forEach(([vendedor, info]) => {
-      const lider = info.lider || "Sin Líder";
-      const efectividadVisitas = info[tipoSeleccionado]?.[periodo] || 0;
-
-      // Si el checkbox correspondiente está desactivado, excluir al vendedor
+  
+    // Obtener los datos mensuales o semanales según el tipo seleccionado
+    const datosEfectividad = data[agenciaSeleccionada][tipoSeleccionado];
+  
+    // Filtrar los datos por el periodo seleccionado
+    const datosFiltradosPorPeriodo = datosEfectividad.filter(
+      (item) => item.periodo === periodo
+    );
+  
+  
+    // Filtrar por categoría seleccionada y líder
+    datosFiltradosPorPeriodo.forEach((item) => {
+      const vendedor = item.vendedor;
+      const efectividadVisitas = item.efectividad;
+      const lider = item.lider; // Obtén el líder
+  
       const ocultarVendedor =
-        (!filterCob && vendedor.includes("VeCob")) ||
-        (!filterMay && vendedor.includes("VeMay")) ||
-        (!filterHorPan && vendedor.includes("VePan")) ||
-        (!filterHorPan && vendedor.includes("VeHor")) ||
-        (!filterMay && vendedor.includes("EsMay")) ||
-        (!filterInd && vendedor.includes("VeInd"));
-
-      // Solo incluir vendedores que NO estén en la lista de ocultos
-      if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && efectividadVisitas > 0) {
-        datosFinales.push({ vendedor, efectividadVisitas });
+        (categoriaSeleccionada === "COB" && !vendedor.includes("VeCob")) ||
+        (categoriaSeleccionada === "MAY" && !vendedor.includes("VeMay") && !vendedor.includes("EsMay")) ||
+        (categoriaSeleccionada === "HOR" && !vendedor.includes("VeHor")) ||
+        (categoriaSeleccionada === "PAN" && !vendedor.includes("VePan")) ||
+        (categoriaSeleccionada === "IND" && !vendedor.includes("VeInd"));
+  
+      // Aplicar filtro de líder
+      const filtrarPorLider = liderSeleccionado === "" || lider === liderSeleccionado;
+  
+      if (!ocultarVendedor && filtrarPorLider) {
+        datosFinales.push({ vendedor, efectividadVisitas, lider }); // Incluye el líder
       }
     });
+  
     datosFinales.sort((a, b) => b.efectividadVisitas - a.efectividadVisitas);
-    return { datos: datosFinales, lideres: Object.values(vendedores).map((v) => v.lider) };
+  
+    return { datos: datosFinales, lideres: obtenerLideresDeAgencia() }; // Devuelve los líderes
   };
+
 
   return (
     <Card sx={{ mt: 3, p: 2, maxWidth: "100%" }}>
@@ -174,7 +199,22 @@ const GraficEfectividadVisitas = () => {
               </Select>
             </FormControl>
           </Grid>
-
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth>
+              <InputLabel>Canal</InputLabel>
+              <Select
+                value={categoriaSeleccionada}
+                onChange={(e) => setCategoriaSeleccionada(e.target.value)}
+              >
+                <MenuItem value="">Todos</MenuItem>
+                <MenuItem value="HOR">HOR</MenuItem>
+                <MenuItem value="COB">COB</MenuItem>
+                <MenuItem value="MAY">MAY</MenuItem>
+                <MenuItem value="PAN">PAN</MenuItem>
+                <MenuItem value="IND">IND</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
           <Grid item xs={12} sm={6} md={4}>
             <FormControl fullWidth>
               <InputLabel>Líder</InputLabel>
@@ -259,8 +299,8 @@ const GraficEfectividadVisitas = () => {
         </Grid>
 */}
         {/* Gráfico de barras */}
-        <ResponsiveContainer width="100%" height={500}>
-          <BarChart data={procesarDatos().datos} margin={{ top: 20, bottom: 20 }}>
+        <ResponsiveContainer width="100%" height={600}>
+          <BarChart data={procesarDatos().datos} margin={{ top: 50, bottom: 20 }}>
             <XAxis
               dataKey="vendedor"
               angle={isMobile ? -90 : -90}
@@ -276,18 +316,9 @@ const GraficEfectividadVisitas = () => {
               tick={{ fontSize: isMobile ? 8 : 10 }}
             />
             <Tooltip formatter={(value) => `${value.toLocaleString()}%`} />
-            <Legend
-              layout={window.innerWidth < 600 ? 'horizontal' : 'vertical'}
-              align={window.innerWidth < 600 ? 'center' : 'right'}
-              verticalAlign={window.innerWidth < 600 ? 'bottom' : 'middle'}
-              wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
-            />
             <Bar dataKey="efectividadVisitas" name="Efectividad de Visitas (%)">
               {procesarDatos().datos.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill="#00BFFF" // Color celeste
-                />
+                <Cell key={`cell-${index}`} fill="#00BFFF" />
               ))}
               <LabelList
                 dataKey="efectividadVisitas"

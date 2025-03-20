@@ -81,7 +81,7 @@ const GraficClientesPlanificadosLine = () => {
         // Ordenar por fecha después de filtrar
         filtered.sort((a, b) => new Date(a.Fecha) - new Date(b.Fecha));
 
-        console.log("📊 Datos filtrados y ordenados:", filtered);
+        
         setFilteredData(filtered);
     }, [firebaseData, selectedAgencia, selectedLider, selectedVendedor, startDate, endDate, filterCob, filterMay, filterHorPan]);
 

@@ -33,30 +33,46 @@ const GraficHorasTrabajadasLine = () => {
    
        // Función para formatear los datos de Firebase
        const formatRetrievedData = (data) => {
-           let formattedData = [];
-           Object.keys(data).forEach((agencia) => {
-               Object.values(data[agencia]).forEach((entry) => {
-                   if (entry.Fecha && entry["HORAS TRABAJADAS"]) {
-                       let fecha = parseISO(entry.Fecha);
-                       if (isValid(fecha)) {
-                           const horaInicio = entry["HORAS TRABAJADAS"];
-                           const [horas, minutos, segundos] = horaInicio.split(':').map(Number);
-                           const totalSegundos = horas * 3600 + minutos * 60 + segundos;
-   
-                           formattedData.push({
-                               Fecha: fecha.getTime(), // Convertir a timestamp numérico
-                               FechaStr: format(fecha, "yyyy-MM-dd"), // Guardar fecha formateada para tooltip
-                               Vendedor: entry["Ruta "] || "Desconocido",
-                               Lider: entry.LIDER || "Sin líder",
-                               Agencia: agencia,
-                               HoraInicio: totalSegundos, // Convertir la hora a segundos
-                           });
-                       }
-                   }
-               });
-           });
-           return formattedData.sort((a, b) => a.Fecha - b.Fecha); // Ordenar cronológicamente
-       };
+        let formattedData = [];
+        Object.keys(data).forEach((agencia) => {
+            Object.values(data[agencia]).forEach((entry) => {
+                if (entry.Fecha && entry["Horas Trabajadas"]) {
+                    let fecha = parseISO(entry.Fecha);
+                    if (isValid(fecha)) {
+                        let horaInicio = entry["Horas Trabajadas"];
+    
+                        // 🔹 Si es un número decimal, convertirlo a HH:mm:ss
+                        if (typeof horaInicio === "number") {
+                            const totalSegundos = Math.round(horaInicio * 24 * 3600); // Convertir a segundos
+                            const horas = Math.floor(totalSegundos / 3600);
+                            const minutos = Math.floor((totalSegundos % 3600) / 60);
+                            const segundos = totalSegundos % 60;
+                            horaInicio = `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+                        }
+    
+                        // 🔹 Verificar que ahora sea una cadena válida con ":" antes de hacer split
+                        if (typeof horaInicio === "string" && horaInicio.includes(":")) {
+                            const [horas, minutos, segundos] = horaInicio.split(":").map(Number);
+                            const totalSegundos = (horas || 0) * 3600 + (minutos || 0) * 60 + (segundos || 0);
+    
+                            formattedData.push({
+                                Fecha: fecha.getTime(),
+                                FechaStr: format(fecha, "yyyy-MM-dd"),
+                                Vendedor: entry["Ruta "] || "Desconocido",
+                                Lider: entry.LIDER || "Sin líder",
+                                Agencia: agencia,
+                                HoraInicio: totalSegundos, // Convertir la hora a segundos para la gráfica
+                            });
+                        } else {
+                            console.warn(`❌ Valor inesperado en "Horas Trabajadas":`, horaInicio);
+                        }
+                    }
+                }
+            });
+        });
+        return formattedData.sort((a, b) => a.Fecha - b.Fecha);
+    };
+    
    
        useEffect(() => {
            const filtered = firebaseData.filter((item) => {
@@ -83,7 +99,6 @@ const GraficHorasTrabajadasLine = () => {
            // Ordenar por fecha después de filtrar
            filtered.sort((a, b) => new Date(a.Fecha) - new Date(b.Fecha));
    
-           console.log("📊 Datos filtrados y ordenados:", filtered);
            setFilteredData(filtered);
        }, [firebaseData, selectedAgencia, selectedLider, selectedVendedor, startDate, endDate, filterCob, filterMay, filterHorPan]);
    

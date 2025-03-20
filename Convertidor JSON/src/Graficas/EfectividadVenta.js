@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { database, ref, onValue } from "../firebaseConfig";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LabelList, Cell } from "recharts";
-import { FormControl, Select, MenuItem, InputLabel, Card, FormControlLabel, FormGroup, CardContent, Grid, TextField, Checkbox } from "@mui/material";
+import { FormControl, Select, MenuItem, InputLabel, Card, CardContent, Grid, TextField } from "@mui/material";
 import { format, getISOWeek, parseISO } from "date-fns";
 
 const GraficEfectividadVentas = () => {
@@ -11,11 +11,7 @@ const GraficEfectividadVentas = () => {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(new Date());
   const [liderSeleccionado, setLiderSeleccionado] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [filterCob, setFilterCob] = useState(true);
-  const [filterMay, setFilterMay] = useState(true);
-  const [filterHorPan, setFilterHorPan] = useState(true);
-  const [filterInd, setFilterInd] = useState(true);
-
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("");
   useEffect(() => {
     const dbRef = ref(database);
     onValue(dbRef, (snapshot) => {
@@ -23,8 +19,6 @@ const GraficEfectividadVentas = () => {
         let firebaseData = snapshot.val();
         const efectividadPorAgencia = calcularEfectividadVentas(firebaseData);
         setData(efectividadPorAgencia);
-        console.log("✅ Datos obtenidos efectividad de ventas:", efectividadPorAgencia);
-
         if (efectividadPorAgencia["CUE"]) {
           setAgenciaSeleccionada("CUE");
         }
@@ -36,6 +30,7 @@ const GraficEfectividadVentas = () => {
 
   const calcularEfectividadVentas = (firebaseData) => {
     let efectividadPorAgencia = {};
+  
     Object.keys(firebaseData).forEach((agencia) => {
       let registros = firebaseData[agencia];
       let efectividadVendedores = {};
@@ -44,18 +39,28 @@ const GraficEfectividadVentas = () => {
         // Verificar que los campos necesarios estén presentes
         if (!registro["Fecha"] || !registro["Vendedor "]) return;
   
-        // Asegurarse de que 'Efectividad de Ventas ' sea una cadena de texto
         let efectividadVentasStr = registro["Efectividad de Ventas "];
-        if (typeof efectividadVentasStr !== "string") {
-          efectividadVentasStr = "0%"; // Valor predeterminado si no es una cadena
+  
+        // Excluir registros con "S/P"
+        if (efectividadVentasStr === "S/P") return;
+  
+        let efectividadVentas = 0;
+  
+        if (typeof efectividadVentasStr === "string") {
+          // Si es un string, elimina el % y convierte a número decimal
+          efectividadVentas = parseFloat(efectividadVentasStr.replace("%", "")) / 100 || 0;
+        } else if (typeof efectividadVentasStr === "number") {
+          efectividadVentas = efectividadVentasStr;
         }
+  
+        // Excluir registros con efectividad de ventas igual a 0
+        if (efectividadVentas === 0) return;
   
         let fecha = new Date(registro["Fecha"]);
         let mes = format(fecha, "yyyy-MM");
         let semana = `${format(fecha, "yyyy")}-W${getISOWeek(fecha)}`;
         let vendedor = registro["Vendedor "].trim();
         let lider = registro["LIDER"] ? registro["LIDER"].trim() : "";
-        let efectividadVentas = parseFloat(efectividadVentasStr.replace("%", "")) || 0; // Convertir a número
   
         if (!efectividadVendedores[vendedor]) {
           efectividadVendedores[vendedor] = {
@@ -72,7 +77,7 @@ const GraficEfectividadVentas = () => {
           efectividadVendedores[vendedor].efectividadMensual[mes] = 0;
           efectividadVendedores[vendedor].conteoMensual[mes] = 0;
         }
-        efectividadVendedores[vendedor].efectividadMensual[mes] += efectividadVentas;
+        efectividadVendedores[vendedor].efectividadMensual[mes] += efectividadVentas * 100;
         efectividadVendedores[vendedor].conteoMensual[mes] += 1;
   
         // Acumulación de la efectividad de ventas semanal
@@ -90,14 +95,22 @@ const GraficEfectividadVentas = () => {
         Object.keys(efectividadVendedores[vendedor].efectividadMensual).forEach((mes) => {
           let suma = efectividadVendedores[vendedor].efectividadMensual[mes];
           let conteo = efectividadVendedores[vendedor].conteoMensual[mes];
-          efectividadVendedores[vendedor].efectividadMensual[mes] = suma / conteo;
+          if (conteo > 0) {
+            efectividadVendedores[vendedor].efectividadMensual[mes] = suma / conteo;
+          } else {
+            efectividadVendedores[vendedor].efectividadMensual[mes] = 0; // Evitar división por 0
+          }
         });
   
         // Promedio semanal
         Object.keys(efectividadVendedores[vendedor].efectividadSemanal).forEach((semana) => {
           let suma = efectividadVendedores[vendedor].efectividadSemanal[semana];
           let conteo = efectividadVendedores[vendedor].conteoSemanal[semana];
-          efectividadVendedores[vendedor].efectividadSemanal[semana] = suma / conteo;
+          if (conteo > 0) {
+            efectividadVendedores[vendedor].efectividadSemanal[semana] = (suma / conteo) * 100;
+          } else {
+            efectividadVendedores[vendedor].efectividadSemanal[semana] = 0; // Evitar división por 0
+          }
         });
       });
   
@@ -106,6 +119,7 @@ const GraficEfectividadVentas = () => {
   
     return efectividadPorAgencia;
   };
+  
 
   const obtenerPeriodo = () => {
     if (!fechaSeleccionada || !(fechaSeleccionada instanceof Date)) {
@@ -131,34 +145,39 @@ const GraficEfectividadVentas = () => {
   };
 
   const procesarDatos = () => {
-    if (!data[agenciaSeleccionada]) return { datos: [], lideres: [] };
-
+    if (!data[agenciaSeleccionada]) {
+      return { datos: [], lideres: [] };
+    }
+  
     const vendedores = data[agenciaSeleccionada];
     const periodo = obtenerPeriodo();
     let datosFinales = [];
-
+  
     Object.entries(vendedores).forEach(([vendedor, info]) => {
       const lider = info.lider || "Sin Líder";
       const efectividadVentas = info[tipoSeleccionado]?.[periodo] || 0;
-
-      // Si el checkbox correspondiente está desactivado, excluir al vendedor
+  
+      // 🔹 Excluir valores "S/P" y efectividad de ventas menor o igual a 0
+      if (efectividadVentas === "S/P" || efectividadVentas <= 0) return;
+  
+      // Filtrar vendedores según la categoría seleccionada
       const ocultarVendedor =
-        (!filterCob && vendedor.includes("VeCob")) ||
-        (!filterMay && vendedor.includes("VeMay")) ||
-        (!filterHorPan && vendedor.includes("VePan")) ||
-        (!filterHorPan && vendedor.includes("VeHor")) ||
-        (!filterMay && vendedor.includes("EsMay")) ||
-        (!filterInd && vendedor.includes("VeInd"));
-
-      // Solo incluir vendedores que NO estén en la lista de ocultos
-      if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && efectividadVentas > 0) {
+        (categoriaSeleccionada === "COB" && !vendedor.includes("VeCob")) ||
+        (categoriaSeleccionada === "MAY" && !vendedor.includes("VeMay") && !vendedor.includes("EsMay")) ||
+        (categoriaSeleccionada === "HOR" && !vendedor.includes("VeHor")) ||
+        (categoriaSeleccionada === "PAN" && !vendedor.includes("VePan")) ||
+        (categoriaSeleccionada === "IND" && !vendedor.includes("VeInd"));
+  
+      // Solo incluir vendedores que cumplen con los filtros de líder, categoría y efectividad válida
+      if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado)) {
         datosFinales.push({ vendedor, efectividadVentas });
       }
     });
-    datosFinales.sort((a, b) => b.efectividadVentas - a.efectividadVentas);
+  
+    datosFinales.sort((a, b) => b.efectividadVentas - a.efectividadVentas); // Ordenar de mayor a menor
     return { datos: datosFinales, lideres: Object.values(vendedores).map((v) => v.lider) };
   };
-
+  
   return (
     <Card sx={{ mt: 3, p: 2, maxWidth: "100%" }}>
       <CardContent>
@@ -180,7 +199,22 @@ const GraficEfectividadVentas = () => {
               </Select>
             </FormControl>
           </Grid>
-
+          <Grid item xs={12} sm={6} md={3}>
+            <FormControl fullWidth>
+              <InputLabel>Canal</InputLabel>
+              <Select
+                value={categoriaSeleccionada}
+                onChange={(e) => setCategoriaSeleccionada(e.target.value)}
+              >
+                <MenuItem value="">Todos</MenuItem>
+                <MenuItem value="HOR">HOR</MenuItem>
+                <MenuItem value="COB">COB</MenuItem>
+                <MenuItem value="MAY">MAY</MenuItem>
+                <MenuItem value="PAN">PAN</MenuItem>
+                <MenuItem value="IND">IND</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
           <Grid item xs={12} sm={6} md={4}>
             <FormControl fullWidth>
               <InputLabel>Líder</InputLabel>
@@ -243,8 +277,8 @@ const GraficEfectividadVentas = () => {
         />
 
         {/* Gráfico de barras */}
-        <ResponsiveContainer width="100%" height={500}>
-          <BarChart data={procesarDatos().datos} margin={{ top: 20, bottom: 20 }}>
+        <ResponsiveContainer width="100%" height={600}>
+          <BarChart data={procesarDatos().datos} margin={{ top: 50, bottom: 20 }}>
             <XAxis
               dataKey="vendedor"
               angle={isMobile ? -90 : -90}
@@ -260,12 +294,7 @@ const GraficEfectividadVentas = () => {
               tick={{ fontSize: isMobile ? 8 : 10 }}
             />
             <Tooltip formatter={(value) => `${value.toLocaleString()}%`} />
-            <Legend
-              layout={window.innerWidth < 600 ? 'horizontal' : 'vertical'}
-              align={window.innerWidth < 600 ? 'center' : 'right'}
-              verticalAlign={window.innerWidth < 600 ? 'bottom' : 'middle'}
-              wrapperStyle={{ fontSize: '10px', marginRight: window.innerWidth < 600 ? '0' : '-30px' }}
-            />
+
             <Bar dataKey="efectividadVentas" name="Efectividad de Ventas (%)">
               {procesarDatos().datos.map((entry, index) => (
                 <Cell

@@ -34,7 +34,7 @@ const GraficEfectividadVisitasLine = () => {
         let formattedData = [];
         Object.keys(data).forEach((agencia) => {
             Object.values(data[agencia]).forEach((entry) => {
-                if (entry.Fecha && entry["Efectividad de Visitas"]) { // Cambiar a "Efectividad de Visitas"
+                if (entry.Fecha && entry["Efectividad de Visitas (50 m)"]) { // Cambiar a "Efectividad de Visitas"
                     let fecha = parseISO(entry.Fecha);
                     if (isValid(fecha)) {
                         formattedData.push({
@@ -43,7 +43,13 @@ const GraficEfectividadVisitasLine = () => {
                             Vendedor: entry["Ruta "] || "Desconocido",
                             Lider: entry.LIDER || "Sin líder",
                             Agencia: agencia,
-                            EfectividadVisitas: parseFloat(entry["Efectividad de Visitas"].replace("%", "")) || 0, // Cambiar a "EfectividadVisitas"
+                            EfectividadVisitas: typeof entry["Efectividad de Visitas (50 m)"] === "string"
+                                ? parseFloat(entry["Efectividad de Visitas (50 m)"].replace("%", ""))
+                                : typeof entry["Efectividad de Visitas (50 m)"] === "number"
+                                    ? entry["Efectividad de Visitas (50 m)"] * 100  // Convertir de 0.85 a 85%
+                                    : 0,
+
+
                         });
                     }
                 }
@@ -77,7 +83,7 @@ const GraficEfectividadVisitasLine = () => {
         // Ordenar por fecha después de filtrar
         filtered.sort((a, b) => new Date(a.Fecha) - new Date(b.Fecha));
 
-        console.log("📊 Datos filtrados y ordenados:", filtered);
+
         setFilteredData(filtered);
     }, [firebaseData, selectedAgencia, selectedLider, selectedVendedor, startDate, endDate, filterCob, filterMay, filterHorPan]);
 
@@ -177,18 +183,18 @@ const GraficEfectividadVisitasLine = () => {
                         />
                         {/* Renderizar las líneas para todos los vendedores filtrados */}
                         {selectedAgencia &&
-                        [...new Set(filteredData.map(d => d.Vendedor))].map((vendedor, index) => (
-                            <Line
-                                key={vendedor}
-                                type="monotone"
-                                dataKey="EfectividadVisitas" // Cambiar a "EfectividadVisitas"
-                                data={filteredData.filter(d => d.Vendedor === vendedor)}
-                                name={vendedor}
-                                stroke={colores[index % colores.length]}
-                                strokeWidth={2}
-                                connectNulls={true}
-                            />
-                        ))}
+                            [...new Set(filteredData.map(d => d.Vendedor))].map((vendedor, index) => (
+                                <Line
+                                    key={vendedor}
+                                    type="monotone"
+                                    dataKey="EfectividadVisitas" // Cambiar a "EfectividadVisitas"
+                                    data={filteredData.filter(d => d.Vendedor === vendedor)}
+                                    name={vendedor}
+                                    stroke={colores[index % colores.length]}
+                                    strokeWidth={2}
+                                    connectNulls={true}
+                                />
+                            ))}
 
                     </LineChart>
                 </ResponsiveContainer>

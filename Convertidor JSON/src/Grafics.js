@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { format, getISOWeek, parseISO } from "date-fns";
 import "react-datepicker/dist/react-datepicker.css";
-import { database, ref, push, onValue } from "./firebaseConfig";
+import { database, ref, push, onValue, get } from "./firebaseConfig";
 import { LabelList, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
-import { IconButton, Button, Card, CardContent, Typography, Grid, Select, MenuItem, InputLabel, FormControl, Box, TextField } from "@mui/material";
+import { IconButton, Button, Card, CardContent, Typography, Grid, Select, MenuItem, InputLabel, FormControl, Box, TextField, CircularProgress, Modal } from "@mui/material";
 import { Add, Remove } from "@mui/icons-material";
 import GraficaCompleteRuta from "./Graficas/GraficCompleteRuta";
 import GraficVentaDiaria from "./Graficas/GraficVentaDiaria";
@@ -27,7 +27,7 @@ import GraficClientesPlanificados from "./Graficas/ClientesPlanificados";
 import GraficClientesPlanificadosLine from "./Graficas/ClientesPlanificadosLine";
 import GraficTiempoPromedioVisitas from "./Graficas/TiempoPromedioVisitas";
 import GraficTiempoPromedioVisitasLine from "./Graficas/TiempoPromedioVisitasLine";
-
+import InsertChartIcon from "@mui/icons-material/InsertChart";
 const ExcelUploader = () => {
   const [file, setFile] = useState(null);
   const [excelData, setExcelData] = useState({});
@@ -54,12 +54,10 @@ const ExcelUploader = () => {
   const [maximizedClientesPlanificadosLine, setMaximizedClientesPlanificadosLine] = useState(false);
   const [maximizedTiempoPromedioVisitas, setMaximizedTiempoPromedioVisitas] = useState(false);
   const [maximizedTiempoPromedioVisitasLine, setMaximizedTiempoPromedioVisitasLine] = useState(false);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  const [filterText, setFilterText] = useState("");
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(""); // Estado para la categoría seleccionada
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
 
   // Columnas que deben ser convertidas a porcentaje
   const percentageColumns = [
@@ -99,16 +97,21 @@ const ExcelUploader = () => {
       if (typeof data[key] === "object") {
         formatRetrievedData(data[key]);
       } else if (typeof data[key] === "number") {
-        data[key] = parseFloat(data[key].toFixed(2)); // Redondear a dos decimales
+        data[key] = isNaN(data[key]) ? null : parseFloat(data[key].toFixed(2));
+      } else if (data[key] === "NaN:NaN:NaN") {
+        data[key] = null;
       }
     }
     return data;
   };
+  
 
-  // 🔹 Función para limpiar y convertir valores correctamente
   const formatValue = (key, value) => {
-    if (value === undefined || value === null) return value;
-
+    if (value === undefined || value === null || value === "") return null;
+  
+    // Si el valor es "S/P", conservarlo tal cual en Firebase
+    if (value === "S/P") return "S/P";
+  
     // Convertir porcentaje
     if (percentageColumns.includes(key) && typeof value === "string" && value.includes("%")) {
       return value;
@@ -116,26 +119,32 @@ const ExcelUploader = () => {
     if (percentageColumns.includes(key) && !isNaN(value)) {
       return `${(parseFloat(value) * 100).toFixed(2)}%`;
     }
-
+  
     // Convertir hora desde formato decimal (Excel almacena las horas como fracción de día)
     if (timeColumns.includes(key) && !isNaN(value)) {
       let totalSeconds = Math.round(parseFloat(value) * 24 * 3600);
       let hours = Math.floor(totalSeconds / 3600);
       let minutes = Math.floor((totalSeconds % 3600) / 60);
       let seconds = totalSeconds % 60;
+      
+      if (isNaN(hours) || isNaN(minutes) || isNaN(seconds)) return null; // Evitar NaN
+  
       return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
     }
-
+  
     // Convertir duración (horas trabajadas) de decimal a HH:mm:ss
     if (durationColumns.includes(key) && !isNaN(value)) {
       let totalSeconds = Math.round(parseFloat(value) * 24 * 3600);
       let hours = Math.floor(totalSeconds / 3600);
       let minutes = Math.floor((totalSeconds % 3600) / 60);
       let seconds = totalSeconds % 60;
+  
+      if (isNaN(hours) || isNaN(minutes) || isNaN(seconds)) return null; // Evitar NaN
+  
       return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
     }
-
-    // 🔹 CORRECCIÓN: Redondear valores en dólares antes de formatear y mostrar
+  
+    // Redondear valores en dólares antes de formatear y mostrar
     if (dollarColumns.includes(key)) {
       let cleanValue = typeof value === "string" ? value.replace("$", "").trim() : value;
       let roundedValue = parseFloat(cleanValue);
@@ -143,15 +152,18 @@ const ExcelUploader = () => {
         return `${roundedValue.toFixed(2)}`;
       }
     }
-
+  
     // Convertir fecha a formato YYYY-MM-DD
     if (dateColumns.includes(key) && !isNaN(value)) {
       let date = new Date((value - 25569) * 86400 * 1000); // Convierte número de Excel a fecha
+      if (isNaN(date.getTime())) return null; // Evita fechas inválidas
       return date.toISOString().split("T")[0];
     }
-
+  
     return value;
   };
+  
+  
 
   // 🔹 Función para manejar la selección del archivo
   const handleFileUpload = (e) => {
@@ -167,7 +179,8 @@ const ExcelUploader = () => {
 
       let previewData = {};
       workbook.SheetNames.forEach(sheetName => {
-        let sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+        const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" });
+
 
         if (sheetData.length > 1) {
           const headers = sheetData[1]; // Usar la segunda fila como encabezados
@@ -196,21 +209,42 @@ const ExcelUploader = () => {
       alert("Por favor, selecciona un archivo Excel.");
       return;
     }
-
-    for (const sheetName in excelData) {
-      for (const row of excelData[sheetName]) {
-        try {
-          await push(ref(database, sheetName), row);
-        } catch (error) {
-          console.error(`Error subiendo datos a la colección ${sheetName}:`, error);
+  
+    setLoading(true);
+  
+    try {
+      for (const sheetName in excelData) {
+        const sheetRef = ref(database, sheetName);
+  
+        const snapshot = await get(sheetRef);
+        const existingData = snapshot.exists() ? snapshot.val() : {};
+        const existingSet = new Set(Object.values(existingData).map(JSON.stringify));
+  
+        // 🔹 Filtrar registros vacíos (todos los valores son null)
+        const newData = excelData[sheetName].filter(row => {
+          return !existingSet.has(JSON.stringify(row)) && Object.values(row).some(value => value !== null);
+        });
+  
+        // 🔹 Subir solo datos válidos
+        for (const row of newData) {
+          await push(sheetRef, row);
         }
+  
       }
+  
+      alert("Datos subidos exitosamente a Firebase.");
+      setExcelData({});
+      setFile(null);
+      setOpen(false);
+    } catch (error) {
+      console.error("Error al subir datos:", error);
+      alert("Ocurrió un error al subir los datos.");
+    } finally {
+      setLoading(false);
     }
-
-    alert("Datos subidos exitosamente a Firebase Realtime Database.");
-    setExcelData({});
-    setFile(null);
   };
+  
+  
 
   // Obtener datos desde Firebase y mostrarlos en la consola
   useEffect(() => {
@@ -220,9 +254,8 @@ const ExcelUploader = () => {
         let data = snapshot.val();
         data = formatRetrievedData(data); // Aplicar formateo de decimales
         setFirebaseData(data);
-        console.log("🔥 Datos obtenidos desde Firebase:", data);
       } else {
-        //console.log("⚠️ No hay datos en Firebase.");
+        console.log("⚠️ No hay datos en Firebase.");
       }
     }, (error) => {
       console.error("❌ Error al obtener datos:", error);
@@ -232,87 +265,105 @@ const ExcelUploader = () => {
   // Función para calcular promedios por vendedor (con líder) y retornarlos
   const calcularPromediosPorVendedor = () => {
     if (!firebaseData || Object.keys(firebaseData).length === 0) {
-      console.log("⚠️ No hay datos disponibles.");
-      return {};
+        return {};
     }
 
     const datos = firebaseData;
     let promediosPorAgencia = {};
 
     Object.keys(datos).forEach((agencia) => {
-      let registros = datos[agencia];
-      let promediosVendedores = {};
+        let registros = datos[agencia];
+        let promediosVendedores = {};
 
-      Object.values(registros).forEach((registro) => {
-        if (!registro["Fecha"] || !registro["Porcentaje de Cumplimiento de Ruta"] || !registro["Vendedor "]) return;
+        Object.values(registros).forEach((registro) => {
+            if (!registro["Fecha"] || !registro["Cumplimiento de Ruta"] || !registro["Vendedor "]) return;
 
-        let fecha = new Date(registro["Fecha"]);
-        let mes = fecha.getFullYear() + "-" + (fecha.getMonth() + 1).toString().padStart(2, "0"); // Formato YYYY-MM
-        let semana = fecha.getFullYear() + "-" + getWeekNumber(fecha); // Formato YYYY-WXX
-        let vendedor = registro["Ruta "].trim();
-        let lider = registro["LIDER"] ? registro["LIDER"].trim() : "";
-        let porcentaje = parseFloat(registro["Porcentaje de Cumplimiento de Ruta"].replace("%", "")) || 0;
+            let fecha = new Date(registro["Fecha"]);
+            let mes = fecha.getFullYear() + "-" + (fecha.getMonth() + 1).toString().padStart(2, "0"); // Formato YYYY-MM
+            let semana = fecha.getFullYear() + "-" + getWeekNumber(fecha); // Formato YYYY-WXX
+            let vendedor = registro["Vendedor "].trim();
+            let lider = registro["LIDER"] ? registro["LIDER"].trim() : "";
 
-        if (!promediosVendedores[vendedor]) {
-          promediosVendedores[vendedor] = {
-            lider: lider,
-            sumasMensuales: {},
-            conteosMensuales: {},
-            sumasSemanales: {},
-            conteosSemanales: {}
-          };
-        }
+            // Manejo seguro del valor de "Cumplimiento de Ruta"
+            let valor = registro["Cumplimiento de Ruta"];
+            
+            // 🛑 Si el valor es "S/P" o inválido, **ignorar completamente**
+            if (valor === "S/P" || valor === undefined || valor === null || valor === "" || isNaN(valor)) return;
 
-        // Agrupar por mes
-        if (!promediosVendedores[vendedor].sumasMensuales[mes]) {
-          promediosVendedores[vendedor].sumasMensuales[mes] = 0;
-          promediosVendedores[vendedor].conteosMensuales[mes] = 0;
-        }
-        promediosVendedores[vendedor].sumasMensuales[mes] += porcentaje;
-        promediosVendedores[vendedor].conteosMensuales[mes]++;
+            let porcentaje = 0;
+            if (typeof valor === "string" && valor.includes("%")) {
+                porcentaje = parseFloat(valor.replace("%", "")); // Convertir "95%" a 95
+            } else if (!isNaN(valor)) {
+                porcentaje = parseFloat(valor) * 100; // Convertir 0.95 a 95
+            }
 
-        // Agrupar por semana
-        if (!promediosVendedores[vendedor].sumasSemanales[semana]) {
-          promediosVendedores[vendedor].sumasSemanales[semana] = 0;
-          promediosVendedores[vendedor].conteosSemanales[semana] = 0;
-        }
-        promediosVendedores[vendedor].sumasSemanales[semana] += porcentaje;
-        promediosVendedores[vendedor].conteosSemanales[semana]++;
-      });
+            if (!promediosVendedores[vendedor]) {
+                promediosVendedores[vendedor] = {
+                    lider: lider,
+                    sumasMensuales: {},
+                    conteosMensuales: {},
+                    sumasSemanales: {},
+                    conteosSemanales: {}
+                };
+            }
 
-      // Calcular promedios
-      let resultados = {};
-      Object.keys(promediosVendedores).forEach((vendedor) => {
-        let promediosMensuales = {};
-        let promediosSemanales = {};
+            // Agrupar por mes
+            if (!promediosVendedores[vendedor].sumasMensuales[mes]) {
+                promediosVendedores[vendedor].sumasMensuales[mes] = 0;
+                promediosVendedores[vendedor].conteosMensuales[mes] = 0;
+            }
+            promediosVendedores[vendedor].sumasMensuales[mes] += porcentaje;
+            promediosVendedores[vendedor].conteosMensuales[mes]++;
 
-        Object.keys(promediosVendedores[vendedor].sumasMensuales).forEach((mes) => {
-          promediosMensuales[mes] = (
-            promediosVendedores[vendedor].sumasMensuales[mes] /
-            promediosVendedores[vendedor].conteosMensuales[mes]
-          ).toFixed(2) + "%";
+            // Agrupar por semana
+            if (!promediosVendedores[vendedor].sumasSemanales[semana]) {
+                promediosVendedores[vendedor].sumasSemanales[semana] = 0;
+                promediosVendedores[vendedor].conteosSemanales[semana] = 0;
+            }
+            promediosVendedores[vendedor].sumasSemanales[semana] += porcentaje;
+            promediosVendedores[vendedor].conteosSemanales[semana]++;
         });
 
-        Object.keys(promediosVendedores[vendedor].sumasSemanales).forEach((semana) => {
-          promediosSemanales[semana] = (
-            promediosVendedores[vendedor].sumasSemanales[semana] /
-            promediosVendedores[vendedor].conteosSemanales[semana]
-          ).toFixed(2) + "%";
+        // Calcular promedios excluyendo "S/P"
+        let resultados = {};
+        Object.keys(promediosVendedores).forEach((vendedor) => {
+            let promediosMensuales = {};
+            let promediosSemanales = {};
+
+            Object.keys(promediosVendedores[vendedor].sumasMensuales).forEach((mes) => {
+                if (promediosVendedores[vendedor].conteosMensuales[mes] > 0) {
+                    promediosMensuales[mes] = (
+                        promediosVendedores[vendedor].sumasMensuales[mes] /
+                        promediosVendedores[vendedor].conteosMensuales[mes]
+                    ).toFixed(2) + "%";
+                } else {
+                    promediosMensuales[mes] = "S/P"; // Si no hay valores válidos, devolver "S/P"
+                }
+            });
+
+            Object.keys(promediosVendedores[vendedor].sumasSemanales).forEach((semana) => {
+                if (promediosVendedores[vendedor].conteosSemanales[semana] > 0) {
+                    promediosSemanales[semana] = (
+                        promediosVendedores[vendedor].sumasSemanales[semana] /
+                        promediosVendedores[vendedor].conteosSemanales[semana]
+                    ).toFixed(2) + "%";
+                } else {
+                    promediosSemanales[semana] = "S/P"; // Si no hay valores válidos, devolver "S/P"
+                }
+            });
+
+            resultados[vendedor] = {
+                lider: promediosVendedores[vendedor].lider,
+                promedioMensual: promediosMensuales,
+                promedioSemanal: promediosSemanales,
+            };
         });
 
-        resultados[vendedor] = {
-          lider: promediosVendedores[vendedor].lider,
-          promedioMensual: promediosMensuales,
-          promedioSemanal: promediosSemanales,
-        };
-      });
-
-      promediosPorAgencia[agencia] = resultados;
+        promediosPorAgencia[agencia] = resultados;
     });
 
-    //console.log("📊 Promedios por agencia y vendedor:", promediosPorAgencia);
     return promediosPorAgencia;
-  };
+};
 
   // Función auxiliar para obtener el número de la semana del año
   const getWeekNumber = (date) => {
@@ -364,44 +415,83 @@ const ExcelUploader = () => {
       return Array.from(lideresUnicos);
     };
 
-    console.log("maximizedVentas:", maximizedVentas);
-    console.log("isMobile:", isMobile);
+
 
     // Procesar datos para la gráfica: para cada vendedor se extrae el porcentaje del periodo predeterminado
+    const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(""); // Estado del filtro
+
     const procesarDatos = () => {
       if (!data[agenciaSeleccionada]) return { datos: [], lideres: [] };
 
       const vendedores = data[agenciaSeleccionada];
       const periodo = obtenerPeriodo();
-
       let datosFinales = [];
 
       Object.entries(vendedores).forEach(([vendedor, info]) => {
         const lider = info.lider || "Sin Líder";
+        const porcentaje = parseFloat(
+          (tipoSeleccionado === "promedioMensual"
+            ? info.promedioMensual[periodo]
+            : info.promedioSemanal[periodo]
+          )?.replace("%", "") || 0
+        );
 
-        // Si hay un líder seleccionado, solo mostramos sus vendedores
-        if (liderSeleccionado === "" || lider === liderSeleccionado) {
-          datosFinales.push({
-            vendedor,
-            porcentaje: parseFloat(
-              (tipoSeleccionado === "promedioMensual"
-                ? info.promedioMensual[periodo]
-                : info.promedioSemanal[periodo]
-              )?.replace("%", "") || 0
-            ),
-          });
+        // 🔹 Filtrar por categoría seleccionada en el ComboBox
+        const ocultarVendedor =
+          (categoriaSeleccionada === "COB" && !vendedor.includes("VeCob")) ||
+          (categoriaSeleccionada === "MAY" && !vendedor.includes("VeMay") && !vendedor.includes("EsMay")) ||
+          (categoriaSeleccionada === "HOR" && !vendedor.includes("VeHor")) ||
+          (categoriaSeleccionada === "PAN" && !vendedor.includes("VePan")) ||
+          (categoriaSeleccionada === "IND" && !vendedor.includes("VeInd"));
+
+        // Solo incluir vendedores que coincidan con el filtro de líder y categoría
+        if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado)) {
+          datosFinales.push({ vendedor, porcentaje });
         }
       });
+
       datosFinales.sort((a, b) => b.porcentaje - a.porcentaje); // Ordenar de mayor a menor
       return { datos: datosFinales };
     };
 
+
+    const graficas = useMemo(
+      () => [
+        { title: "Gráfica de Promedio de Cumplimiento de Ruta", component: <GraficaCumplimiento /> },
+        { title: "Gráfica de Cumplimiento de Ruta (Diario)", component: <GraficaCompleteRuta /> },
+        { title: "Gráfica de Promedio de Efectividad de Visitas (50m)", component: <GraficEfectividadVisitas /> },
+        { title: "Gráfica de Efectividad de Visitas (Diario)", component: <GraficEfectividadVisitasLine /> },
+        { title: "Gráfica de Promedio de Efectividad de Ventas", component: <GraficEfectividadVentas /> },
+        { title: "Gráfica Efectividad de Ventas (Diario)", component: <GraficEfectividadVentasLine /> },
+        { title: "Gráfica de Promedio en dólares de Avance de Venta Diaria", component: <GraficVentaDiaria /> },
+        { title: "Gráfica de Ventas (Diario)", component: <GraficVentaDiariaLine /> },
+        { title: "Gráfica de Ticket Promedio", component: <GraficTicketPromedio /> },
+        { title: "Gráfica Ticket Promedio (Diario)", component: <GraficTicketPromedioLine /> },
+        { title: "Gráfica de Promedio de Hora Inicio", component: <GraficHoraInicio /> },
+        { title: "Gráfica Hora Inicio (Diario)", component: <GraficHoraInicioLine /> },
+        { title: "Gráfica de Promedio de Hora Fin", component: <GraficaHoraFin /> },
+        { title: "Gráfica de Hora de fin (Diario)", component: <GraficHoraFinLine /> },
+        { title: "Gráfica de Promedio de Horas Trabajadas", component: <GraficaHorasTrabajadas /> },
+        { title: "Gráfica de Horas Trabajadas (Diario)", component: <GraficHorasTrabajadasLine /> },
+        { title: "Gráfica de Promedio de Tiempo de Visitas", component: <GraficTiempoPromedioVisitas /> },
+        { title: "Gráfica de Tiempo de Visitas (Diario)", component: <GraficTiempoPromedioVisitasLine /> },
+        { title: "Gráfica de Promedio de Clientes Planificados", component: <GraficClientesPlanificados /> },
+        { title: "Clientes Planificados (Diario)", component: <GraficClientesPlanificadosLine /> }
+      ],
+      []
+    );
+    // Filtra solo las gráficas que coincidan con el texto ingresado
+    const graficasFiltradas = graficas.filter(({ title }) =>
+      title.toLowerCase().includes(filterText.toLowerCase())
+    );
+
+
     return (
       <Card sx={{ mt: 3, p: 2, maxWidth: '100%' }}>
         <CardContent>
-          <Grid container spacing={2} alignItems="center" justifyContent="center" direction={{ xs: "column", sm: "row" }}>
+          <Grid container spacing={2} alignItems="center" justifyContent="center" >
             {/* Selector de Agencia */}
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={4}>
               <FormControl fullWidth>
                 <InputLabel>Agencia</InputLabel>
                 <Select
@@ -417,9 +507,26 @@ const ExcelUploader = () => {
                 </Select>
               </FormControl>
             </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <FormControl fullWidth>
+                <InputLabel>Canal</InputLabel>
+                <Select
+                  value={categoriaSeleccionada}
+                  onChange={(e) => setCategoriaSeleccionada(e.target.value)}
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  <MenuItem value="HOR">HOR</MenuItem>
+                  <MenuItem value="COB">COB</MenuItem>
+                  <MenuItem value="MAY">MAY</MenuItem>
+                  <MenuItem value="PAN">PAN</MenuItem>
+                  <MenuItem value="IND">IND</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
 
             {/* Selector de Líder */}
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={4}>
               <FormControl fullWidth>
                 <InputLabel>Líder</InputLabel>
                 <Select
@@ -435,7 +542,7 @@ const ExcelUploader = () => {
             </Grid>
 
             {/* Selector de Tipo (Mensual/Semanal) */}
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={12} sm={6} md={4}>
               <FormControl fullWidth>
                 <InputLabel>Tipo</InputLabel>
                 <Select
@@ -474,7 +581,7 @@ const ExcelUploader = () => {
                   },
                   '&.Mui-focused': {
                     borderColor: '#3f51b5',
-                    boxShadow: '0 0 5px rgba(63, 81, 181, 0.5)',
+                    boxShadow: '0 0 5px rgba(0, 37, 248, 0.5)',
                   },
                 },
               }}
@@ -482,10 +589,10 @@ const ExcelUploader = () => {
           </Grid>
 
           {/* Gráfica */}
-          <ResponsiveContainer width="100%" height={isMobile ? 500 : 500}>
+          <ResponsiveContainer width="100%" height={isMobile ? 600 : 600}>
             <BarChart
               data={procesarDatos().datos}
-              margin={{ top: 20, right: 30, left: 20, bottom: isMobile ? 100 : 80 }}
+              margin={{ top: 70, right: 10, left: 0, bottom: isMobile ? 100 : 80 }}
             >
               <XAxis
                 dataKey="vendedor"
@@ -538,10 +645,37 @@ const ExcelUploader = () => {
 
   return (
     <div style={{ padding: "20px" }}>
-      {/* 🔹 Card para Subir Archivo */}
-      <Card sx={{ p: 3, mb: 3 }}>
-        <CardContent>
-          <Typography variant="h5" align="center">Subir Archivo Excel a Firebase</Typography>
+       {/* 🔹 Título con icono */}
+      <Box display="flex" alignItems="center" justifyContent="center" mb={2}>
+        <InsertChartIcon sx={{ fontSize: 40, color: "#1976D2", mr: 1 }} />
+        <Typography variant="h4" fontWeight="bold">
+          Indicadores Vendedores
+        </Typography>
+      </Box>
+
+      {/* 🔹 Botón para abrir el modal */}
+      <Box display="flex" justifyContent="center" mb={3}>
+        <Button variant="contained" onClick={() => setOpen(true)}>
+          Subir Archivo
+        </Button>
+      </Box>
+
+      {/* Modal para subir archivo */}
+      <Modal open={open} onClose={() => setOpen(false)}>
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 400,
+            bgcolor: "background.paper",
+            boxShadow: 24,
+            p: 4,
+            borderRadius: 2,
+          }}
+        >
+          <Typography variant="h6" align="center">Subir Archivo Excel</Typography>
           <Grid container spacing={2} alignItems="center" justifyContent="center" sx={{ mt: 2 }}>
             <Grid item>
               <Button variant="contained" component="label">
@@ -555,938 +689,247 @@ const ExcelUploader = () => {
               </Grid>
             )}
             <Grid item>
-              <Button variant="contained" color="success" onClick={handleUploadToFirebase}>Subir</Button>
+              <Button
+                variant="contained"
+                color="success"
+                onClick={handleUploadToFirebase}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} color="inherit" /> : "Subir"}
+              </Button>
             </Grid>
           </Grid>
-        </CardContent>
-      </Card>
+        </Box>
+      </Modal>
+   
 
-      {/* 🔹 Gráficas en paralelo */}
-      {Object.keys(promediosCalculados).length > 0 && (
-        <Grid container spacing={2} alignItems="stretch">
-          {/* Primera gráfica */}
-          <Grid
-            item
-            xs={12}
-            sm={isMobile ? 12 : (maximizedLeft ? 12 : 6)}
-            sx={{
-              display: isMobile || !maximizedRight ? "block" : "none",
-            }}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              style={{ height: "100%" }}
+
+      {/* 🔹 Campo de filtro */}
+      <TextField
+        fullWidth
+        label="Filtrar gráficas"
+        value={filterText}
+        onChange={(e) => setFilterText(e.target.value)}
+        sx={{ mb: 3 }}
+      />
+
+      {/* 🔹 Lista de gráficas con filtro */}
+      <Grid container spacing={2} alignItems="stretch">
+        {[
+          {
+            title: "Gráfica de Promedio de Cumplimiento de Ruta",
+            component: <GraficaCumplimiento data={promediosCalculados} />,
+            state: maximizedLeft,
+            setState: setMaximizedLeft,
+            oppositeState: maximizedRight, // Estado opuesto (gráfica derecha)
+            setOppositeState: setMaximizedRight // Función para ocultar la gráfica derecha
+          },
+          {
+            title: "Gráfica de Cumplimiento de Ruta (Diario)",
+            component: <GraficaCompleteRuta />,
+            state: maximizedRight,
+            setState: setMaximizedRight,
+            oppositeState: maximizedLeft, // Estado opuesto (gráfica izquierda)
+            setOppositeState: setMaximizedLeft // Función para ocultar la gráfica izquierda
+          },
+          {
+            title: "Gráfica de Promedio de Efectividad de Visitas (50m)",
+            component: <GraficEfectividadVisitas />,
+            state: maximizedVentas,
+            setState: setMaximizedVentas,
+            oppositeState: maximizedVentasLine, // Estado opuesto (gráfica de línea)
+            setOppositeState: setMaximizedVentasLine // Función para ocultar la gráfica de línea
+          },
+          {
+            title: "Gráfica de Efectividad de Visitas (Diario)",
+            component: <GraficEfectividadVisitasLine />,
+            state: maximizedVentasLine,
+            setState: setMaximizedVentasLine,
+            oppositeState: maximizedVentas, // Estado opuesto (gráfica de barras)
+            setOppositeState: setMaximizedVentas // Función para ocultar la gráfica de barras
+          },
+          {
+            title: "Gráfica de Promedio de Efectividad de Ventas",
+            component: <GraficEfectividadVentas />,
+            state: maximizedEfeVentas,
+            setState: setMaximizedEfeVentas,
+            oppositeState: maximizedEfeVentasLine, // Estado opuesto (gráfica de línea)
+            setOppositeState: setMaximizedEfeVentasLine // Función para ocultar la gráfica de línea
+          },
+          {
+            title: "Gráfica Efectividad de Ventas (Diario)",
+            component: <GraficEfectividadVentasLine />,
+            state: maximizedEfeVentasLine,
+            setState: setMaximizedEfeVentasLine,
+            oppositeState: maximizedEfeVentas, // Estado opuesto (gráfica de barras)
+            setOppositeState: setMaximizedEfeVentas // Función para ocultar la gráfica de barras
+          },
+          {
+            title: "Gráfica de Promedio en dólares de Avance de Venta Diaria",
+            component: <GraficVentaDiaria />,
+            state: maximizedTicket,
+            setState: setMaximizedTicket,
+            oppositeState: maximizedTicketLine, // Estado opuesto (gráfica de línea)
+            setOppositeState: setMaximizedTicketLine // Función para ocultar la gráfica de línea
+          },
+          {
+            title: "Gráfica de Ventas (Diario)",
+            component: <GraficVentaDiariaLine />,
+            state: maximizedTicketLine,
+            setState: setMaximizedTicketLine,
+            oppositeState: maximizedTicket, // Estado opuesto (gráfica de barras)
+            setOppositeState: setMaximizedTicket // Función para ocultar la gráfica de barras
+          },
+          {
+            title: "Gráfica de Ticket Promedio",
+            component: <GraficTicketPromedio />,
+            state: maximizedTicket,
+            setState: setMaximizedTicket,
+            oppositeState: maximizedTicketLine, // Estado opuesto (gráfica de línea)
+            setOppositeState: setMaximizedTicketLine // Función para ocultar la gráfica de línea
+          },
+          {
+            title: "Gráfica Ticket Promedio (Diario)",
+            component: <GraficTicketPromedioLine />,
+            state: maximizedTicketLine,
+            setState: setMaximizedTicketLine,
+            oppositeState: maximizedTicket, // Estado opuesto (gráfica de barras)
+            setOppositeState: setMaximizedTicket // Función para ocultar la gráfica de barr
+          },
+          {
+            title: "Gráfica de Promedio de Hora Inicio",
+            component: <GraficHoraInicio />,
+            state: maximizedHoraInicio,
+            setState: setMaximizedHoraInicio,
+            oppositeState: maximizedHoraInicioLine, // Estado opuesto (gráfica de línea)
+            setOppositeState: setMaximizedHoraInicioLine // Función para ocultar la gráfica de línea
+          },
+          {
+            title: "Gráfica Hora Inicio (Diario)",
+            component: <GraficHoraInicioLine />,
+            state: maximizedHoraInicioLine,
+            setState: setMaximizedHoraInicioLine,
+            oppositeState: maximizedHoraInicio, // Estado opuesto (gráfica de barras)
+            setOppositeState: setMaximizedHoraInicio // Función para ocultar la gráfica de barras
+          },
+          {
+            title: "Gráfica de Promedio de Hora Fin",
+            component: <GraficaHoraFin />,
+            state: maximizedHoraFin,
+            setState: setMaximizedHoraFin,
+            oppositeState: maximizedHoraFinLine, // Estado opuesto (gráfica de línea)
+            setOppositeState: setMaximizedHoraFinLine // Función para ocultar la gráfica de línea
+          },
+          {
+            title: "Gráfica de Hora de fin (Diario)",
+            component: <GraficHoraFinLine />,
+            state: maximizedHoraFinLine,
+            setState: setMaximizedHoraFinLine,
+            oppositeState: maximizedHoraFin, // Estado opuesto (gráfica de barras)
+            setOppositeState: setMaximizedHoraFin // Función para ocultar la gráfica de barras
+          },
+          {
+            title: "Gráfica de Promedio de Horas Trabajadas",
+            component: <GraficaHorasTrabajadas />,
+            state: maximizedHorasTrabajadas,
+            setState: setMaximizedHorasTrabajadas,
+            oppositeState: maximizedHorasTrabajadasLine, // Estado opuesto (gráfica de línea)
+            setOppositeState: setMaximizedHorasTrabajadasLine // Función para ocultar la gráfica de línea
+          },
+          {
+            title: "Gráfica de Horas Trabajadas (Diario)",
+            component: <GraficHorasTrabajadasLine />,
+            state: maximizedHorasTrabajadasLine,
+            setState: setMaximizedHorasTrabajadasLine,
+            oppositeState: maximizedHorasTrabajadas, // Estado opuesto (gráfica de barras)
+            setOppositeState: setMaximizedHorasTrabajadas // Función para ocultar la gráfica de barras
+          },
+          {
+            title: "Gráfica de Promedio de Tiempo de Visitas",
+            component: <GraficTiempoPromedioVisitas />,
+            state: maximizedTiempoPromedioVisitas,
+            setState: setMaximizedTiempoPromedioVisitas,
+            oppositeState: maximizedTiempoPromedioVisitasLine, // Estado opuesto (gráfica de línea)
+            setOppositeState: setMaximizedTiempoPromedioVisitasLine // Función para ocultar la gráfica de línea 
+
+          },
+          {
+            title: "Gráfica de Tiempo de Visitas (Diario)",
+            component: <GraficTiempoPromedioVisitasLine />,
+            state: maximizedTiempoPromedioVisitasLine,
+            setState: setMaximizedTiempoPromedioVisitasLine,
+            oppositeState: maximizedTiempoPromedioVisitas, // Estado opuesto (gráfica de barras)
+            setOppositeState: setMaximizedTiempoPromedioVisitas // Función para ocultar la gráfica de barras
+          },
+          {
+            title: "Gráfica de Promedio de Clientes Planificados",
+            component: <GraficClientesPlanificados />,
+            state: maximizedClientesPlanificados,
+            setState: setMaximizedClientesPlanificados,
+            oppositeState: maximizedClientesPlanificadosLine, // Estado opuesto (gráfica de línea)
+            setOppositeState: setMaximizedClientesPlanificadosLine // Función para ocultar la gráfica de línea
+          },
+          {
+            title: "Clientes Planificados (Diario)",
+            component: <GraficClientesPlanificadosLine />,
+            state: maximizedClientesPlanificadosLine,
+            setState: setMaximizedClientesPlanificadosLine,
+            oppositeState: maximizedClientesPlanificados, // Estado opuesto (gráfica de barras)
+            setOppositeState: setMaximizedClientesPlanificados // Función para ocultar la gráfica de barras
+          },
+
+
+        ]
+          .filter(({ title }) => title.toLowerCase().includes(filterText.toLowerCase())) // Filtrado dinámico
+          .map(({ title, component, state, setState, oppositeState, setOppositeState }, index) => (
+            <Grid
+              key={title}
+              item
+              xs={12}  // Ocupa 12 columnas (toda la pantalla) en dispositivos pequeños
+              sm={12}  // Mantiene una sola columna en pantallas medianas
+              md={6}   // Dos columnas en pantallas grandes
             >
               <Card sx={{ p: 3, height: "100%", position: "relative" }}>
                 {!isMobile && (
-                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                      onClick={() => {
-                        setMaximizedLeft(!maximizedLeft);
-                        setMaximizedRight(false);
-                      }}
-                    >
-                      {maximizedLeft ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                    </IconButton>
-                  </Box>
-                )}
-                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <Typography variant="h6" align="center">Gráfica de Cumplimiento Promedio de Ruta</Typography>
-                  <GraficaCumplimiento data={promediosCalculados} />
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-
-          {/* Segunda gráfica */}
-          <Grid
-            item
-            xs={12}
-            sm={isMobile ? 12 : (maximizedRight ? 12 : 6)}
-            sx={{
-              display: isMobile || !maximizedLeft ? "block" : "none",
-            }}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              style={{ height: "100%" }}
-            >
-              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-                {!isMobile && (
-                  <Box sx={{ position: "absolute", top: 10, left: 10 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                      onClick={() => {
-                        setMaximizedRight(!maximizedRight);
-                        setMaximizedLeft(false);
-                      }}
-                    >
-                      {maximizedRight ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                    </IconButton>
-                  </Box>
-                )}
-                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <Typography variant="h6" align="center">Gráfica de Cumplimiento de Ruta (Diario)</Typography>
-                  <GraficaCompleteRuta />
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-        </Grid>
-      )}
-
-      {/* Septima y Octava */}
-      <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedVisitas ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedVisitas && !maximizedVisitasLine) || // Mostrar si ninguna está maximizada
-                maximizedVisitas // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <AnimatePresence>
-            <motion.div
-              key="grafica-ticket"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              style={{ height: "100%" }}
-            >
-              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-                {!isMobile && (
-                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                      onClick={() => {
-                        setMaximizedVisitas(!maximizedVisitas);
-                        setMaximizedVisitasLine(false); // Ocultar la otra gráfica al maximizar esta
-                      }}
-                    >
-                      {maximizedVisitas ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                    </IconButton>
-                  </Box>
-                )}
-                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <Typography variant="h6" align="center">Gráfica de Promedio de Efectividad de Visitas</Typography>
-                  <GraficEfectividadVisitas />
-                </CardContent>
-              </Card>
-            </motion.div>
-          </AnimatePresence>
-        </Grid>
-
-        {/* Octava Grafica */}
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedVisitasLine ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedVisitas && !maximizedVisitasLine) || // Mostrar si ninguna está maximizada
-                maximizedVisitasLine // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
-            style={{ height: "100%" }}
-          >
-            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-              {!isMobile && (
-                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
-                  <IconButton
-                    size="small"
-                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                    onClick={() => {
-                      setMaximizedVisitasLine(!maximizedVisitasLine);
-                      setMaximizedVisitas(false); // Ocultar la otra gráfica al maximizar esta
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      top: 10,
+                      right: index % 2 === 0 ? 10 : "auto", // Derecha para la izquierda
+                      left: index % 2 !== 0 ? 10 : "auto", // Izquierda para la derecha
                     }}
                   >
-                    {maximizedVisitasLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                  </IconButton>
-                </Box>
-              )}
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <Typography variant="h6" align="center">Gráfica de Efectividad de Visitas (Diario)</Typography>
-                <GraficEfectividadVisitasLine />
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-      </Grid>
-
-      {/* Novena y Decima */}
-      <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedEfeVentas ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedEfeVentas && !maximizedEfeVentasLine) || // Mostrar si ninguna está maximizada
-                maximizedEfeVentas // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <AnimatePresence>
-            <motion.div
-              key="grafica-EfectividadVentas"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              style={{ height: "100%" }}
-            >
-              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-                {!isMobile && (
-                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
                     <IconButton
                       size="small"
                       sx={{ p: 0, m: 0, width: 24, height: 24 }}
                       onClick={() => {
-                        setMaximizedEfeVentas(!maximizedEfeVentas);
-                        setMaximizedEfeVentasLine(false); // Ocultar la otra gráfica al maximizar esta
+                        if (state) {
+                          // Si la gráfica está maximizada, la minimizamos
+                          setState(false);
+                          setOppositeState(false); // Restauramos la gráfica opuesta
+                        } else {
+                          // Si la gráfica está minimizada, la maximizamos
+                          setState(true);
+                          setOppositeState(false); // Ocultamos la gráfica opuesta
+                        }
                       }}
                     >
-                      {maximizedEfeVentas ? <Remove fontSize="small" /> : <Add fontSize="small" />}
+                      {state ? <Remove fontSize="small" /> : <Add fontSize="small" />}
                     </IconButton>
                   </Box>
                 )}
                 <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <Typography variant="h6" align="center">Gráfica de Promedio de Efectividad de Ventas</Typography>
-                  <GraficEfectividadVentas />
+                  <Typography variant="h6" align="center">{title}</Typography>
+                  {component}
                 </CardContent>
               </Card>
-            </motion.div>
-          </AnimatePresence>
-        </Grid>
+            </Grid>
+          ))}
 
-        {/* Octava Grafica */}
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedEfeVentasLine ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedEfeVentas && !maximizedEfeVentasLine) || // Mostrar si ninguna está maximizada
-                maximizedEfeVentasLine // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
-            style={{ height: "100%" }}
-          >
-            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-              {!isMobile && (
-                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
-                  <IconButton
-                    size="small"
-                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                    onClick={() => {
-                      setMaximizedEfeVentasLine(!maximizedEfeVentasLine);
-                      setMaximizedEfeVentas(false); // Ocultar la otra gráfica al maximizar esta
-                    }}
-                  >
-                    {maximizedEfeVentasLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                  </IconButton>
-                </Box>
-              )}
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <Typography variant="h6" align="center">Gráfica Efectividad de Ventas (Diario)</Typography>
-                <GraficEfectividadVentasLine />
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
       </Grid>
-
-
-      {/* Tercera y Cuarta Gráfica */}
-      <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
-        {/* Tercera gráfica */}
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedVentas ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedVentas && !maximizedVentasLine) || // Mostrar si ninguna está maximizada
-                maximizedVentas // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <AnimatePresence>
-            <motion.div
-              key="grafica-ventas"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              style={{ height: "100%" }}
-            >
-              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-                {!isMobile && (
-                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                      onClick={() => {
-                        setMaximizedVentas(!maximizedVentas);
-                        setMaximizedVentasLine(false); // Ocultar la otra gráfica al maximizar esta
-                      }}
-                    >
-                      {maximizedVentas ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                    </IconButton>
-                  </Box>
-                )}
-                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <Typography variant="h6" align="center">Gráfica de Promedio en dólares de Avance de Venta Diaria</Typography>
-                  <GraficVentaDiaria />
-                </CardContent>
-              </Card>
-            </motion.div>
-          </AnimatePresence>
-        </Grid>
-
-        {/* Cuarta gráfica */}
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedVentasLine ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedVentas && !maximizedVentasLine) || // Mostrar si ninguna está maximizada
-                maximizedVentasLine // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
-            style={{ height: "100%" }}
-          >
-            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-              {!isMobile && (
-                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
-                  <IconButton
-                    size="small"
-                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                    onClick={() => {
-                      setMaximizedVentasLine(!maximizedVentasLine);
-                      setMaximizedVentas(false); // Ocultar la otra gráfica al maximizar esta
-                    }}
-                  >
-                    {maximizedVentasLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                  </IconButton>
-                </Box>
-              )}
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <Typography variant="h6" align="center">Gráfica de Ventas (Diario)</Typography>
-                <GraficVentaDiariaLine />
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-      </Grid>
-
-
-      {/* Quinta y Sexta Gráfica */}
-      <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
-        {/* Tercera gráfica */}
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedTicket ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedTicket && !maximizedTicketLine) || // Mostrar si ninguna está maximizada
-                maximizedTicket // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <AnimatePresence>
-            <motion.div
-              key="grafica-ticket"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              style={{ height: "100%" }}
-            >
-              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-                {!isMobile && (
-                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                      onClick={() => {
-                        setMaximizedTicket(!maximizedTicket);
-                        setMaximizedTicketLine(false); // Ocultar la otra gráfica al maximizar esta
-                      }}
-                    >
-                      {maximizedTicket ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                    </IconButton>
-                  </Box>
-                )}
-                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <Typography variant="h6" align="center">Gráfica de Ticket Promedio</Typography>
-                  <GraficTicketPromedio />
-                </CardContent>
-              </Card>
-            </motion.div>
-          </AnimatePresence>
-        </Grid>
-
-        {/* Cuarta gráfica */}
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedTicketLine ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedTicket && !maximizedTicketLine) || // Mostrar si ninguna está maximizada
-                maximizedTicketLine // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
-            style={{ height: "100%" }}
-          >
-            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-              {!isMobile && (
-                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
-                  <IconButton
-                    size="small"
-                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                    onClick={() => {
-                      setMaximizedTicketLine(!maximizedTicketLine);
-                      setMaximizedTicket(false); // Ocultar la otra gráfica al maximizar esta
-                    }}
-                  >
-                    {maximizedTicketLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                  </IconButton>
-                </Box>
-              )}
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <Typography variant="h6" align="center">Gráfica Ticket Promedio (Diario)</Typography>
-                <GraficTicketPromedioLine />
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-      </Grid>
-
-      {/* Onceava y Doceava */}
-      <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedHoraInicio ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedHoraInicio && !maximizedHoraInicioLine) || // Mostrar si ninguna está maximizada
-                maximizedHoraInicio // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <AnimatePresence>
-            <motion.div
-              key="grafica-HoraInicio"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              style={{ height: "100%" }}
-            >
-              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-                {!isMobile && (
-                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                      onClick={() => {
-                        setMaximizedHoraInicio(!maximizedHoraInicio);
-                        setMaximizedHoraInicioLine(false); // Ocultar la otra gráfica al maximizar esta
-                      }}
-                    >
-                      {maximizedHoraInicio ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                    </IconButton>
-                  </Box>
-                )}
-                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <Typography variant="h6" align="center">Gráfica de Promedio de Hora Inicio</Typography>
-                  <GraficHoraInicio />
-                </CardContent>
-              </Card>
-            </motion.div>
-          </AnimatePresence>
-        </Grid>
-
-        {/* Octava Grafica */}
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedHoraInicioLine ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedHoraInicio && !maximizedHoraInicioLine) || // Mostrar si ninguna está maximizada
-                maximizedHoraInicioLine // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
-            style={{ height: "100%" }}
-          >
-            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-              {!isMobile && (
-                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
-                  <IconButton
-                    size="small"
-                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                    onClick={() => {
-                      setMaximizedHoraInicioLine(!maximizedHoraInicioLine);
-                      setMaximizedHoraInicio(false); // Ocultar la otra gráfica al maximizar esta
-                    }}
-                  >
-                    {maximizedHoraInicioLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                  </IconButton>
-                </Box>
-              )}
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <Typography variant="h6" align="center">Gráfica Hora Inicio (Diario)</Typography>
-                <GraficHoraInicioLine />
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-      </Grid>
-
-      {/* Hora Fin*/}
-      <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedHoraFin ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedHoraFin && !maximizedHoraFinLine) || // Mostrar si ninguna está maximizada
-                maximizedHoraFin // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <AnimatePresence>
-            <motion.div
-              key="grafica-HoraFin"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              style={{ height: "100%" }}
-            >
-              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-                {!isMobile && (
-                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                      onClick={() => {
-                        setMaximizedHoraFin(!maximizedHoraFin);
-                        setMaximizedHoraFinLine(false); // Ocultar la otra gráfica al maximizar esta
-                      }}
-                    >
-                      {maximizedHoraFin ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                    </IconButton>
-                  </Box>
-                )}
-                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <Typography variant="h6" align="center">Gráfica de Promedio de Hora Fin</Typography>
-                  <GraficaHoraFin />
-                </CardContent>
-              </Card>
-            </motion.div>
-          </AnimatePresence>
-        </Grid>
-
-        {/* Octava Grafica */}
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedHoraFinLine ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedHoraFin && !maximizedHoraFinLine) || // Mostrar si ninguna está maximizada
-                maximizedHoraFinLine // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
-            style={{ height: "100%" }}
-          >
-            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-              {!isMobile && (
-                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
-                  <IconButton
-                    size="small"
-                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                    onClick={() => {
-                      setMaximizedHoraFinLine(!maximizedHoraFinLine);
-                      setMaximizedHoraFin(false); // Ocultar la otra gráfica al maximizar esta
-                    }}
-                  >
-                    {maximizedHoraFinLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                  </IconButton>
-                </Box>
-              )}
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <Typography variant="h6" align="center">Gráfica de Hora de fin (Diario)</Typography>
-                <GraficHoraFinLine />
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-      </Grid>
-
- {/* Horas Trabajadas*/}
-      <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedHorasTrabajadas ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedHorasTrabajadas && !maximizedHorasTrabajadasLine) || // Mostrar si ninguna está maximizada
-                maximizedHorasTrabajadas // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <AnimatePresence>
-            <motion.div
-              key="grafica-HorasTrabajadas"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              style={{ height: "100%" }}
-            >
-              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-                {!isMobile && (
-                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                      onClick={() => {
-                        setMaximizedHorasTrabajadas(!maximizedHorasTrabajadas);
-                        setMaximizedHorasTrabajadasLine(false); // Ocultar la otra gráfica al maximizar esta
-                      }}
-                    >
-                      {maximizedHorasTrabajadas ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                    </IconButton>
-                  </Box>
-                )}
-                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <Typography variant="h6" align="center">Gráfica de Promedio de Horas Trabajadas</Typography>
-                  <GraficaHorasTrabajadas />
-                </CardContent>
-              </Card>
-            </motion.div>
-          </AnimatePresence>
-        </Grid>
-
-        {/* Octava Grafica */}
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedHorasTrabajadasLine ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedHorasTrabajadas && !maximizedHorasTrabajadasLine) || // Mostrar si ninguna está maximizada
-                maximizedHorasTrabajadasLine // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
-            style={{ height: "100%" }}
-          >
-            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-              {!isMobile && (
-                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
-                  <IconButton
-                    size="small"
-                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                    onClick={() => {
-                      setMaximizedHorasTrabajadasLine(!maximizedHorasTrabajadasLine);
-                      setMaximizedHorasTrabajadas(false); // Ocultar la otra gráfica al maximizar esta
-                    }}
-                  >
-                    {maximizedHorasTrabajadasLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                  </IconButton>
-                </Box>
-              )}
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <Typography variant="h6" align="center">Gráfica de Horas Trabajadas (Diario)</Typography>
-                <GraficHorasTrabajadasLine />
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-      </Grid>
-
-{/* Tiempo promedio de visitas*/}
-<Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedTiempoPromedioVisitas ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedTiempoPromedioVisitas && !maximizedTiempoPromedioVisitasLine) || // Mostrar si ninguna está maximizada
-                maximizedTiempoPromedioVisitas // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <AnimatePresence>
-            <motion.div
-              key="grafica-TiempoPromedioVisitas"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              style={{ height: "100%" }}
-            >
-              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-                {!isMobile && (
-                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                      onClick={() => {
-                        setMaximizedTiempoPromedioVisitas(!maximizedTiempoPromedioVisitas);
-                        setMaximizedTiempoPromedioVisitasLine(false); // Ocultar la otra gráfica al maximizar esta
-                      }}
-                    >
-                      {maximizedTiempoPromedioVisitas ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                    </IconButton>
-                  </Box>
-                )}
-                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <Typography variant="h6" align="center">Gráfica de Promedio de Tiempo de Visitas</Typography>
-                  <GraficTiempoPromedioVisitas />
-                </CardContent>
-              </Card>
-            </motion.div>
-          </AnimatePresence>
-        </Grid>
-
-        {/* Octava Grafica */}
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedTiempoPromedioVisitasLine ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedTiempoPromedioVisitas && !maximizedTiempoPromedioVisitasLine) || // Mostrar si ninguna está maximizada
-                maximizedTiempoPromedioVisitasLine // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
-            style={{ height: "100%" }}
-          >
-            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-              {!isMobile && (
-                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
-                  <IconButton
-                    size="small"
-                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                    onClick={() => {
-                      setMaximizedTiempoPromedioVisitasLine(!maximizedTiempoPromedioVisitasLine);
-                      setMaximizedTiempoPromedioVisitas(false); // Ocultar la otra gráfica al maximizar esta
-                    }}
-                  >
-                    {maximizedTiempoPromedioVisitasLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                  </IconButton>
-                </Box>
-              )}
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <Typography variant="h6" align="center">Gráfica de Tiempo de Visitas (Diario)</Typography>
-                <GraficTiempoPromedioVisitasLine />
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-      </Grid>
-
-
- {/* Clientes Planificados*/}
- <Grid container spacing={2} alignItems="stretch" sx={{ mt: 2 }}>
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedClientesPlanificados ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedClientesPlanificados && !maximizedClientesPlanificadosLine) || // Mostrar si ninguna está maximizada
-                maximizedClientesPlanificados // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <AnimatePresence>
-            <motion.div
-              key="grafica-Clientes Planificados"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              style={{ height: "100%" }}
-            >
-              <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-                {!isMobile && (
-                  <Box sx={{ position: "absolute", top: 10, right: 10 }}>
-                    <IconButton
-                      size="small"
-                      sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                      onClick={() => {
-                        setMaximizedClientesPlanificados(!maximizedClientesPlanificados);
-                        setMaximizedClientesPlanificadosLine(false); // Ocultar la otra gráfica al maximizar esta
-                      }}
-                    >
-                      {maximizedClientesPlanificados ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                    </IconButton>
-                  </Box>
-                )}
-                <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <Typography variant="h6" align="center">Gráfica de Promedio de Clientes Planificados</Typography>
-                  <GraficClientesPlanificados />
-                </CardContent>
-              </Card>
-            </motion.div>
-          </AnimatePresence>
-        </Grid>
-
-        {/* Octava Grafica */}
-        <Grid
-          item
-          xs={12}
-          sm={isMobile ? 12 : (maximizedClientesPlanificadosLine ? 12 : 6)}
-          sx={{
-            display:
-              isMobile || // Mostrar siempre en móvil
-                (!maximizedClientesPlanificados && !maximizedClientesPlanificadosLine) || // Mostrar si ninguna está maximizada
-                maximizedClientesPlanificadosLine // Mostrar si esta gráfica está maximizada
-                ? "block"
-                : "none",
-          }}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ duration: 0.3 }}
-            style={{ height: "100%" }}
-          >
-            <Card sx={{ p: 3, height: "100%", position: "relative" }}>
-              {!isMobile && (
-                <Box sx={{ position: "absolute", top: 10, left: 10 }}>
-                  <IconButton
-                    size="small"
-                    sx={{ p: 0, m: 0, width: 24, height: 24 }}
-                    onClick={() => {
-                      setMaximizedClientesPlanificadosLine(!maximizedClientesPlanificadosLine);
-                      setMaximizedClientesPlanificados(false); // Ocultar la otra gráfica al maximizar esta
-                    }}
-                  >
-                    {maximizedClientesPlanificadosLine ? <Remove fontSize="small" /> : <Add fontSize="small" />}
-                  </IconButton>
-                </Box>
-              )}
-              <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <Typography variant="h6" align="center">Clientes Planificados (Diario)</Typography>
-                <GraficClientesPlanificadosLine />
-              </CardContent>
-            </Card>
-          </motion.div>
-        </Grid>
-      </Grid>
-
     </div>
+  
+
   );
 };
 

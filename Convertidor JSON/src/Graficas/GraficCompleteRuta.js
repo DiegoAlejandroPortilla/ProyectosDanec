@@ -33,27 +33,30 @@ const GraficaCompleteRuta = () => {
     const formatRetrievedData = (data) => {
         let formattedData = [];
         Object.keys(data).forEach((agencia) => {
-            if (agenciasValidas.includes(agencia)) {
-                Object.values(data[agencia]).forEach((entry) => {
-                    if (entry.Fecha && entry["Porcentaje de Cumplimiento de Ruta"]) {
-                        let fecha = parseISO(entry.Fecha);
-                        if (isValid(fecha)) {
-                            formattedData.push({
-                                Fecha: fecha.getTime(), // Convertir a timestamp numérico
-                                FechaStr: format(fecha, "yyyy-MM-dd"), // Guardar fecha formateada para tooltip
-                                Vendedor: entry["Ruta "] || "Desconocido",
-                                Lider: entry.LIDER || "Sin líder",
-                                Agencia: agencia,
-                                Cumplimiento: parseFloat(entry["Porcentaje de Cumplimiento de Ruta"].replace("%", "")),
-                            });
-                        }
+            Object.values(data[agencia]).forEach((entry) => {
+                if (entry.Fecha && entry["Cumplimiento de Ruta"]) { // Cambiar a "Efectividad de Visitas"
+                    let fecha = parseISO(entry.Fecha);
+                    if (isValid(fecha)) {
+                        formattedData.push({
+                            Fecha: fecha.getTime(), // Convertir a timestamp numérico
+                            FechaStr: format(fecha, "yyyy-MM-dd"), // Guardar fecha formateada para tooltip
+                            Vendedor: entry["Ruta "] || "Desconocido",
+                            Lider: entry.LIDER || "Sin líder",
+                            Agencia: agencia,
+                            Cumplimiento: typeof entry["Cumplimiento de Ruta"] === "string"
+                            ? parseFloat(parseFloat(entry["Cumplimiento de Ruta"].replace("%", "")).toFixed(2))
+                            : typeof entry["Cumplimiento de Ruta"] === "number"
+                                ? parseFloat((entry["Cumplimiento de Ruta"] * 100).toFixed(2))  // Convertir de 0.85 a 85% y limitar a 2 decimales
+                                : 0,
+
+
+                        });
                     }
-                });
-            }
+                }
+            });
         });
         return formattedData.sort((a, b) => a.Fecha - b.Fecha); // Ordenar cronológicamente
     };
-
     useEffect(() => {
         const filtered = firebaseData.filter((item) => {
             const isWithinDateRange =
@@ -70,7 +73,7 @@ const GraficaCompleteRuta = () => {
         // Ordenar por fecha después de filtrar
         filtered.sort((a, b) => new Date(a.Fecha) - new Date(b.Fecha));
 
-        console.log("📊 Datos filtrados y ordenados:", filtered);
+        
         setFilteredData(filtered);
     }, [firebaseData, selectedAgencia, selectedLider, selectedVendedor, startDate, endDate]);
 

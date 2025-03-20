@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-    Button, Grid, TextField, Tooltip, Typography, Box
+    Button, Grid, TextField, Typography, Box, Modal, MenuItem, Select, FormControl, InputLabel, Tooltip
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import CircleIcon from "@mui/icons-material/Circle";
@@ -11,7 +11,18 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import GpsFixedIcon from "@mui/icons-material/GpsFixed";
 
-
+const modalStyle = {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+    width: 400,
+    bgcolor: "background.paper",
+    boxShadow: 24,
+    p: 4,
+    borderRadius: 2,
+    textAlign: "center",
+};
 
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
     backgroundColor: theme.palette.primary.main,
@@ -46,9 +57,41 @@ const ExcelReader = () => {
     const [data, setData] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
 
+    // Estado para los modales
+    const [openUploadModal, setOpenUploadModal] = useState(false);
+    const [openRequestModal, setOpenRequestModal] = useState(false);
+
+    // Datos del usuario para la solicitud de documento
+    const [userName, setUserName] = useState("");
+    const [userEmail, setUserEmail] = useState("");
+    const [selectedLocation, setSelectedLocation] = useState("");
+
     const handleFileUpload = (event) => {
         setFile(event.target.files[0]);
     };
+
+    const handleRequestDocument = () => {
+        if (!userName || !selectedLocation) {
+            alert("Por favor, ingresa tu nombre y selecciona la ubicación.");
+            return;
+        }
+
+        // Número de WhatsApp al que se enviará el mensaje
+        const phoneNumber = "0995047657";
+
+        // Mensaje formateado
+        const message = `Hola, solicito el archivo para dar seguimiento a mis vendedores del día de hoy. \n\nNombre: ${userName}\nAgencia: ${selectedLocation}`;
+
+        // Generar enlace de WhatsApp
+        const whatsappURL = `https://wa.me/593${phoneNumber}?text=${encodeURIComponent(message)}`;
+
+        // Abrir WhatsApp en una nueva ventana
+        window.open(whatsappURL, "_blank");
+
+        // Cerrar el modal
+        setOpenRequestModal(false);
+    };
+
 
     const timeToMinutes = (time) => {
         if (!time) return Infinity;
@@ -134,12 +177,12 @@ const ExcelReader = () => {
                     if (programado === "FUERA DE RUTA") {
                         vendedores[key].totalFueraDeRuta += parseFloat(Total) || 0;
                         vendedores[key].cantidadFueraDeRuta += 1;
-                        
+
                     } else {
                         vendedores[key].clientesProcesados.add(clientKey);
                     }
 
-                    if (Tipo === "00-Registro de Efectividad de Visita" && parseFloat(distancia) <= 70) {
+                    if (Tipo === "00-Registro de Efectividad de Visita" && parseFloat(distancia) <= 50) {
                         if (!vendedores[key].registrosEfectividad.has(razon)) {
                             vendedores[key].registrosEfectividad.set(razon, programado !== "FUERA DE RUTA" ? 1 : 0);
                         }
@@ -172,7 +215,7 @@ const ExcelReader = () => {
                             vendedor.Clientes_Sin_Venta.add(cliente);
                         }
                     });
-                    
+
                     // **Cálculo de visitas efectivas**
                     Object.values(vendedores).forEach(vendedor => {
                         const visitasEfectivas = Array.from(vendedor.registrosEfectividad.values()).filter(value => value > 0).length;
@@ -187,11 +230,11 @@ const ExcelReader = () => {
                         ? (((vendedor.Clientes_Con_Venta.size + vendedor.Clientes_Sin_Venta.size) / vendedor.planificados) * 100).toFixed(2) + "%"
                         : "S/P";
                 });
-                
+
                 // **Conversión final de datos**
                 const processedData = Object.values(vendedores).map(vendedor => {
                     const totalClientes = Number(vendedor.Clientes_Con_Venta.size) + Number(vendedor.cantidadFueraDeRuta);
-                
+
                     return {
                         ...vendedor,
                         totalClientes,
@@ -214,7 +257,7 @@ const ExcelReader = () => {
                         valorTotalFueraRuta: "$" + vendedor.totalFueraDeRuta.toFixed(2)
                     };
                 });
-                
+
 
                 setData(processedData);
             } catch (error) {
@@ -241,7 +284,7 @@ const ExcelReader = () => {
             "Valor Total FUERA DE RUTA": row.valorTotalFueraRuta,
             "Ticket Promedio": row.ticketPromedio,
             "Hora Inicio": row.hora_inicio || "Sin registro",
-            "Hora Fin": row.hora_final || "Sin registro",    
+            "Hora Fin": row.hora_final || "Sin registro",
             "Tiempo Promedio Visitas": row.tiempoPromedioVisitas,
             "Clientes con Venta": row.Clientes_Con_Venta.size,
             "Clientes sin Venta": row.Clientes_Sin_Venta.size,
@@ -256,7 +299,12 @@ const ExcelReader = () => {
 
     return (
         <Box sx={{ p: 3 }}>
-            <Typography variant="h4" gutterBottom>Gestión de Ventas</Typography>
+            <Box display="flex" alignItems="center" justifyContent="center" mb={2}>
+                <AttachMoneyIcon sx={{ fontSize: 40, color: "#1976D2", mr: 1 }} />
+                <Typography variant="h4" fontWeight="bold">
+                    Extracción Diaria de información por vendedor
+                </Typography>
+            </Box>
             <Grid container spacing={2} alignItems="center">
                 <Grid item>
                     <Button variant="contained" component="label" sx={{ textTransform: "none" }}>
@@ -265,10 +313,53 @@ const ExcelReader = () => {
                     </Button>
 
                 </Grid>
+
+                {file && (
+                    <Grid item>
+                        <Typography>{file.name}</Typography>
+                    </Grid>
+                )}
+
+
+                <Grid item>
+                    <Button variant="contained" color="secondary" onClick={() => setOpenRequestModal(true)}>
+                        Solicitar Documento
+                    </Button>
+                </Grid>
+
+                <Modal open={openRequestModal} onClose={() => setOpenRequestModal(false)}>
+                    <Box sx={modalStyle}>
+                        <Typography variant="h6">Solicitar Documento</Typography>
+                        <TextField
+                            label="Nombre"
+                            fullWidth
+                            variant="outlined"
+                            margin="normal"
+                            value={userName}
+                            onChange={(e) => setUserName(e.target.value)}
+                        />
+                        <FormControl fullWidth margin="normal">
+                            <InputLabel>Seleccionar Agencia</InputLabel>
+                            <Select
+                                value={selectedLocation}
+                                onChange={(e) => setSelectedLocation(e.target.value)}
+                            >
+                                <MenuItem value="IBARRA">IBARRA</MenuItem>
+                                <MenuItem value="CUE">CUE</MenuItem>
+                            </Select>
+                        </FormControl>
+                        <Button variant="contained" color="primary" onClick={handleRequestDocument}>
+                            Enviar Solicitud por WhatsApp
+                        </Button>
+                    </Box>
+                </Modal>
+
+               
                 <Grid item>
                     <Button variant="contained" color="primary" onClick={handleProcessFile} sx={{ textTransform: "none" }}>
                         Procesar Archivo
                     </Button>
+
                     <Button variant="contained" color="secondary" onClick={exportToExcel} sx={{ textTransform: "none" }} disabled={data.length === 0}>
                         Exportar a Excel
                     </Button>
@@ -293,13 +384,13 @@ const ExcelReader = () => {
                             <StyledTableCell>Vendedor</StyledTableCell>
                             <StyledTableCell>Planificados</StyledTableCell>
                             <StyledTableCell>Cumplimiento Ruta</StyledTableCell>
-                            <StyledTableCell>Efectividad Visitas (70 m)</StyledTableCell>
+                            <StyledTableCell>Efectividad Visitas (50 m)</StyledTableCell>
                             <StyledTableCell>Efectividad de Ventas</StyledTableCell>
                             <StyledTableCell>Valor Total</StyledTableCell>
                             <StyledTableCell>Valor Total FUERA DE RUTA</StyledTableCell>
                             <StyledTableCell>Ticket Promedio</StyledTableCell>
                             <StyledTableCell>Hora Inicio</StyledTableCell>
-                            <StyledTableCell>Hora Fin</StyledTableCell>                       
+                            <StyledTableCell>Hora Fin</StyledTableCell>
                             <StyledTableCell>Tiempo Promedio Visitas</StyledTableCell>
                         </TableRow>
                     </TableHead>
@@ -317,12 +408,12 @@ const ExcelReader = () => {
                                             </Box>
                                             <Box display="flex" alignItems="center">
                                                 < WarningAmberIcon fontSize="small" style={{ color: "yellow", marginRight: 4 }} />
-                                                Clientes sin venta y visita: {Math.abs(row.clientessinVisitayVenta || 0)}
+                                                Clientes sin venta , ni visita: {Math.abs(row.clientessinVisitayVenta || 0)}
                                             </Box>
 
                                             <Box display="flex" alignItems="center">
                                                 <GpsFixedIcon fontSize="small" style={{ color: "blue", marginRight: 4 }} />
-                                                Visitas en rango (70m): {row?.clientesEfectivosMenor70 ?? 0}
+                                                Visitas en rango (50m): {row?.clientesEfectivosMenor70 ?? 0}
                                             </Box>
 
                                             <Box display="flex" alignItems="center">
