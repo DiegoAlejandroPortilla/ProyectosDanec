@@ -57,19 +57,33 @@ const GraficHorasTrabajadas = () => {
         Object.keys(firebaseData).forEach((agencia) => {
             let registros = firebaseData[agencia];
             let horasTrabajadasVendedores = {};
-
+    
             Object.values(registros).forEach((registro) => {
-                if (!registro["Fecha"] || !registro["Hora Incio_Primer Registro Visita"] || !registro["Hora Fin_Ultimo Registro Visita"] || !registro["Vendedor "]) return;
-
+                if (!registro["Fecha"] || !registro["Vendedor "]) return;
+    
                 let fecha = new Date(registro["Fecha"]);
                 let horaInicio = registro["Hora Incio_Primer Registro Visita"];
                 let horaFin = registro["Hora Fin_Ultimo Registro Visita"];
-                let horasTrabajadas = convertirHoraADecimal(horaFin) - convertirHoraADecimal(horaInicio);
+                let horasTrabajadas = 0; // Valor predeterminado
+    
+                // Si ambas horas son "00:00:00", las horas trabajadas son 0.0
+                if (horaInicio === "00:00:00" && horaFin === "00:00:00") {
+                    horasTrabajadas = 0.0;
+                }
+                // Si ambas horas están presentes y no son "00:00:00", calcular la diferencia
+                else if (horaInicio && horaFin) {
+                    horasTrabajadas = convertirHoraADecimal(horaFin) - convertirHoraADecimal(horaInicio);
+                }
+                // Si alguna de las horas está vacía o es null, las horas trabajadas son 0.0
+                else {
+                    horasTrabajadas = 0.0;
+                }
+    
                 let mes = format(fecha, "yyyy-MM");
                 let semana = `${format(fecha, "yyyy")}-W${getISOWeek(fecha)}`;
                 let vendedor = registro["Vendedor "].trim();
                 let lider = registro["LIDER"] ? registro["LIDER"].trim() : "";
-
+    
                 if (!horasTrabajadasVendedores[vendedor]) {
                     horasTrabajadasVendedores[vendedor] = {
                         lider: lider,
@@ -79,7 +93,7 @@ const GraficHorasTrabajadas = () => {
                         conteoSemanal: {}  // Contador de registros por semana
                     };
                 }
-
+    
                 // Acumulación de las horas trabajadas mensual
                 if (!horasTrabajadasVendedores[vendedor].horasMensual[mes]) {
                     horasTrabajadasVendedores[vendedor].horasMensual[mes] = 0;
@@ -87,7 +101,7 @@ const GraficHorasTrabajadas = () => {
                 }
                 horasTrabajadasVendedores[vendedor].horasMensual[mes] += horasTrabajadas;
                 horasTrabajadasVendedores[vendedor].conteoMensual[mes] += 1;
-
+    
                 // Acumulación de las horas trabajadas semanal
                 if (!horasTrabajadasVendedores[vendedor].horasSemanal[semana]) {
                     horasTrabajadasVendedores[vendedor].horasSemanal[semana] = 0;
@@ -96,7 +110,7 @@ const GraficHorasTrabajadas = () => {
                 horasTrabajadasVendedores[vendedor].horasSemanal[semana] += horasTrabajadas;
                 horasTrabajadasVendedores[vendedor].conteoSemanal[semana] += 1;
             });
-
+    
             // Calcular promedios
             Object.keys(horasTrabajadasVendedores).forEach((vendedor) => {
                 // Promedio mensual
@@ -105,7 +119,7 @@ const GraficHorasTrabajadas = () => {
                     let conteo = horasTrabajadasVendedores[vendedor].conteoMensual[mes];
                     horasTrabajadasVendedores[vendedor].horasMensual[mes] = suma / conteo;
                 });
-
+    
                 // Promedio semanal
                 Object.keys(horasTrabajadasVendedores[vendedor].horasSemanal).forEach((semana) => {
                     let suma = horasTrabajadasVendedores[vendedor].horasSemanal[semana];
@@ -113,13 +127,12 @@ const GraficHorasTrabajadas = () => {
                     horasTrabajadasVendedores[vendedor].horasSemanal[semana] = suma / conteo;
                 });
             });
-
+    
             horasTrabajadasPorAgencia[agencia] = horasTrabajadasVendedores;
         });
-
+    
         return horasTrabajadasPorAgencia;
     };
-
     const obtenerPeriodo = () => {
         if (!fechaSeleccionada || !(fechaSeleccionada instanceof Date)) {
             return "";
@@ -145,15 +158,15 @@ const GraficHorasTrabajadas = () => {
 
     const procesarDatos = () => {
         if (!data[agenciaSeleccionada]) return { datos: [], lideres: [] };
-
+    
         const vendedores = data[agenciaSeleccionada];
         const periodo = obtenerPeriodo();
         let datosFinales = [];
-
+    
         Object.entries(vendedores).forEach(([vendedor, info]) => {
             const lider = info.lider || "Sin Líder";
             const horasTrabajadas = info[tipoSeleccionado]?.[periodo] || 0;
-
+    
             // 🔹 Filtrar vendedores según la categoría seleccionada en el ComboBox
             const ocultarVendedor =
                 (categoriaSeleccionada === "COB" && !vendedor.includes("VeCob")) ||
@@ -161,13 +174,13 @@ const GraficHorasTrabajadas = () => {
                 (categoriaSeleccionada === "HOR" && !vendedor.includes("VeHor")) ||
                 (categoriaSeleccionada === "PAN" && !vendedor.includes("VePan")) ||
                 (categoriaSeleccionada === "IND" && !vendedor.includes("VeInd"));
-
-            // Solo incluir vendedores que cumplen con el filtro de líder, categoría y horas trabajadas mayores a 0
-            if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado) && horasTrabajadas > 0) {
+    
+            // Solo incluir vendedores que cumplen con el filtro de líder y categoría
+            if (!ocultarVendedor && (liderSeleccionado === "" || lider === liderSeleccionado)) {
                 datosFinales.push({ vendedor, horasTrabajadas });
             }
         });
-
+    
         datosFinales.sort((a, b) => b.horasTrabajadas - a.horasTrabajadas); // Ordenar de mayor a menor
         return { datos: datosFinales, lideres: Object.values(vendedores).map((v) => v.lider) };
     };

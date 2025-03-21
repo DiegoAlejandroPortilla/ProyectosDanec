@@ -36,12 +36,12 @@ const GraficHorasTrabajadasLine = () => {
         let formattedData = [];
         Object.keys(data).forEach((agencia) => {
             Object.values(data[agencia]).forEach((entry) => {
-                if (entry.Fecha && entry["Horas Trabajadas"]) {
+                if (entry.Fecha && (entry["Horas Trabajadas"] !== undefined && entry["Horas Trabajadas"] !== null)) {
                     let fecha = parseISO(entry.Fecha);
                     if (isValid(fecha)) {
                         let horaInicio = entry["Horas Trabajadas"];
     
-                        // 🔹 Si es un número decimal, convertirlo a HH:mm:ss
+                        // Manejar 0.0 y otros valores numéricos
                         if (typeof horaInicio === "number") {
                             const totalSegundos = Math.round(horaInicio * 24 * 3600); // Convertir a segundos
                             const horas = Math.floor(totalSegundos / 3600);
@@ -50,7 +50,7 @@ const GraficHorasTrabajadasLine = () => {
                             horaInicio = `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
                         }
     
-                        // 🔹 Verificar que ahora sea una cadena válida con ":" antes de hacer split
+                        // Verificar que sea una cadena válida con ":"
                         if (typeof horaInicio === "string" && horaInicio.includes(":")) {
                             const [horas, minutos, segundos] = horaInicio.split(":").map(Number);
                             const totalSegundos = (horas || 0) * 3600 + (minutos || 0) * 60 + (segundos || 0);
