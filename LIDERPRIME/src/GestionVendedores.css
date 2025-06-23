@@ -1,3 +1,4 @@
+/* INPUT Y BOTONES */
 
 .file-input {
     display: block;
@@ -10,45 +11,77 @@ button {
 }
 
 .button-primary {
-    background-color: #4CAF50 !important; /* Verde */
+    background-color: rgb(1, 7, 1) !important;
     color: white !important;
 }
 
 .button-secondary {
-    background-color: #2196F3 !important; /* Azul */
+    background-color: #2196F3 !important;
     color: white !important;
 }
 
+
+/* TABLA PRINCIPAL */
 
 .table-container {
     width: 100%;
-    max-width: 90%; /* Aumenta el tamaño de la tabla */
+    max-width: 85%;
     margin: 20px auto;
     overflow-x: auto;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 }
 
+/* Cabecera de la tabla */
+.MuiTableHead-root .MuiTableCell-root,
 .table-header {
-    background-color: #1976D2;
-}
-
-.table-cell {
-    font-weight: bold;
+    background-color: #1976D2 !important;
     color: white !important;
+    font-weight: bold !important;
+    text-align: center;
+    font-size: 0.9rem !important;
 }
 
+/* Celdas generales */
+.MuiTableCell-root {
+    padding: 6px 10px !important;
+    font-size: 0.85rem !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+/* Fila alternada */
+.MuiTableRow-root:nth-of-type(even),
 .table-body tr:nth-child(even) {
-    background-color: #f2f2f2;
+    background-color: #f9f9f9 !important;
 }
 
+/* Hover en fila */
+.MuiTableRow-root:hover {
+    background-color: #e3f2fd !important;
+}
+
+/* Celdas especiales */
 .cell-red {
     color: red !important;
-    font-weight: bold;
+    font-weight: bold !important;
 }
 
-/* Responsivo */
+/* ESTILOS RESPONSIVOS */
+
 @media (max-width: 768px) {
     .table-container {
         max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .MuiTableCell-root {
+        font-size: 0.75rem !important;
+        padding: 4px 6px !important;
+    }
+
+    .MuiTableHead-root .MuiTableCell-root {
+        font-size: 0.8rem !important;
     }
 
     .search-input {

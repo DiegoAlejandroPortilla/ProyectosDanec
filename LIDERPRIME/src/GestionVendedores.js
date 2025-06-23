@@ -123,7 +123,7 @@ const getTrabajdasStyle = (time, isHorasTrabajadas) => {
     const totalMinutes = hours * 60 + minutes;
 
     if (totalMinutes < 7 * 60) {
-        return { backgroundColor: '#FF5151', color: 'black'}; // Rojo para menos de 7 horas
+        return { backgroundColor: '#FF5151', color: 'black' }; // Rojo para menos de 7 horas
     } else if (totalMinutes < 8 * 60) {
         return { backgroundColor: '#FFF380', color: 'black' }; // Amarillo para menos de 8 horas
     }
@@ -155,7 +155,7 @@ const greyPalette = [
     "#CCCCCC", // Gris claro pero más notorio
     "#D6D6D6", // Gris claro medio
     "#E0E0E0", // Gris claro neutro
-    
+
     "#F5F5F5", // Gris casi blanco
     "#EAEAEA", // Gris muy claro
     "#FFFFFF", // Blanco puro
@@ -209,17 +209,17 @@ const ExcelReader = () => {
         onValue(dbRef, (snapshot) => {
             if (snapshot.exists()) {
                 const data = snapshot.val();
-    
+
                 const map = {};
                 const agenciasSet = new Set();
-    
+
                 if (data.Data) {
                     Object.values(data.Data).forEach(agenciaData => {
                         // Normalizar las claves al leer los datos
                         const vendedor = agenciaData["Vendedor"]?.trim() || agenciaData["Vendedor "]?.trim();
                         const lider = agenciaData["LIDER"]?.trim() || agenciaData["LIDER "]?.trim();
                         const agencia = agenciaData["Agencia"]?.trim() || agenciaData["Agencia "]?.trim();
-    
+
                         if (vendedor && lider && agencia) {
                             const vendedorNormalizado = vendedor.toUpperCase();
                             map[vendedorNormalizado] = {
@@ -232,7 +232,7 @@ const ExcelReader = () => {
                         }
                     });
                 }
-    
+
                 setLideresMap(map);
                 setAgencias(Array.from(agenciasSet)); // Guardar las agencias normalizadas
             } else {
@@ -252,22 +252,22 @@ const ExcelReader = () => {
             alert("⚠️ Por favor, selecciona una agencia antes de enviar el reporte.");
             return;
         }
-    
+
         if (tableRef.current) {
             tableRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    
+
             setTimeout(() => {
                 // Guardar los estilos originales
                 const originalStyle = tableRef.current.style.cssText;
-    
+
                 // Aplicar estilos temporales para la captura
                 if (filter === "inicioJornada" || filter === "avanceMedioDia") {
                     tableRef.current.style.cssText = "width: 60%; overflow: visible;";
                 } else if (filter === "finalizacionJornada") {
                     tableRef.current.style.cssText = "width: 100%; overflow: visible;";
                 }
-    
-    
+
+
                 html2canvas(tableRef.current, {
                     scale: 2, // Reducir la escala para mejorar el rendimiento
                     logging: true,
@@ -277,14 +277,14 @@ const ExcelReader = () => {
                     const img = new Image();
                     img.src = canvas.toDataURL("image/png");
                     document.body.appendChild(img);
-    
+
                     // Restaurar los estilos originales
                     tableRef.current.style.cssText = originalStyle;
-    
+
                     const now = new Date();
                     const timestamp = now.toISOString().replace(/[-T:.Z]/g, "").slice(0, 15);
                     const fileName = `Reporte_${selectedAgency}_${timestamp}.png`.replace(/\s+/g, "_");
-    
+
                     // Guardar la imagen
                     const imgData = canvas.toDataURL("image/png");
                     const link = document.createElement("a");
@@ -386,7 +386,10 @@ const ExcelReader = () => {
                         vendedores[key].clientesProcesados.add(clientKey);
                     }
 
-                    if (Tipo === "00-Registro de Efectividad de Visita" && parseFloat(distancia) <= 50) {
+                    // Modificación aquí para incluir ambos tipos de registros de efectividad
+                    if ((Tipo === "00-Registro de Efectividad de Visita" ||
+                        Tipo === "00-Registro de Efectividad de Visita Espejo") &&
+                        parseFloat(distancia) <= 50) {
                         if (!vendedores[key].registrosEfectividad.has(razon)) {
                             vendedores[key].registrosEfectividad.set(razon, programado !== "FUERA DE RUTA" ? 1 : 0);
                         }
@@ -419,7 +422,11 @@ const ExcelReader = () => {
                             tipos.includes("02-Pedido CREDITO o CPP Cliente Espejo")
                         ) {
                             vendedor.Clientes_Con_Venta.add(cliente);
-                        } else if (tipos.includes("00-Registro de Efectividad de Visita") || tipos.includes("20-Cambio de producto")) {
+                        } else if (
+                            tipos.includes("00-Registro de Efectividad de Visita Vendedor") ||
+                            tipos.includes("00-Registro de Efectividad de Visita Espejo") ||
+                            tipos.includes("20-Cambio de producto")
+                        ) {
                             vendedor.Clientes_Sin_Venta.add(cliente);
                         }
                     });
@@ -505,8 +512,7 @@ const ExcelReader = () => {
                         clientessinVisitayVenta: 0, // Clientes sin visita y venta es 0
                         valorTotalFueraRuta: "$0.00", // Valor total fuera de ruta es $0.00
                         clientesTotales: 0 // Clientes totales es 0
-
-
+                       
                     });
                 });
 
@@ -586,7 +592,8 @@ const ExcelReader = () => {
                         ValorTotal: row.totalVentas,
                         HoraInicio: row.hora_inicio,
                         HoraFin: row.hora_final,
-                        HorasTrabajadas: row.horasTrabajadas
+                        HorasTrabajadas: row.horasTrabajadas,
+                        TiempoPromedioVisitas: row.tiempoPromedioVisitas,
                     }));
                 default: // tablaCompleta
                     return liderRows;
@@ -615,7 +622,8 @@ const ExcelReader = () => {
                 "Ticket Promedio": row.ticketPromedio,
                 "Hora Fin": row.hora_final || "Sin registro",
                 "Tiempo Promedio Visitas": row.tiempoPromedioVisitas,
-                "Horas Trabajadas": row.horasTrabajadas
+                "Horas Trabajadas": row.horasTrabajadas,
+
             }))
         );
 
@@ -726,7 +734,8 @@ const ExcelReader = () => {
 
 
             <TableContainer component={Paper} sx={{ mt: 3, borderRadius: 2, overflow: "hidden" }} ref={tableRef}>
-                <Table sx={{ minWidth: 650 }}>
+                <Table sx={{ minWidth: 650 }} >
+
                     <TableHead>
                         <TableRow>
                             {filter === "tablaCompleta" && (
@@ -745,6 +754,7 @@ const ExcelReader = () => {
                                     <StyledTableCell>Hora Fin</StyledTableCell>
                                     <StyledTableCell>Tiempo Promedio Visitas</StyledTableCell>
                                     <StyledTableCell>Horas Trabajadas</StyledTableCell>
+                                    
                                 </>
                             )}
                             {filter === "inicioJornada" && (
@@ -780,6 +790,7 @@ const ExcelReader = () => {
                                     <StyledTableCell>Hora Inicio</StyledTableCell>
                                     <StyledTableCell>Hora Fin</StyledTableCell>
                                     <StyledTableCell>Horas Trabajadas</StyledTableCell>
+                                    <StyledTableCell>Tiempo Promedio Visitas</StyledTableCell>
                                 </>
                             )}
                         </TableRow>
@@ -830,22 +841,22 @@ const ExcelReader = () => {
                                         >
                                             {row.Lider}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.Fecha_Doc}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.planificados}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.cumplimientoRuta}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.efectividadVisitas}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.efectividadVentas}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{"$" + (row.totalVentas?.toFixed(2) || "0.00")}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.valorTotalFueraRuta}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.ticketPromedio}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center", ...getCellStyle(row.hora_inicio, true) }}>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.Fecha_Doc}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.planificados}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.cumplimientoRuta}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.efectividadVisitas}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.efectividadVentas}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{"$" + (row.totalVentas?.toFixed(2) || "0.00")}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.valorTotalFueraRuta}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.ticketPromedio}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center", ...getCellStyle(row.hora_inicio, true) }}>
                                             {row.hora_inicio || "Sin registro"}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center", ...getCellStyle(row.hora_final, false) }}>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center", ...getCellStyle(row.hora_final, false) }}>
                                             {row.hora_final || "Sin registro"}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.tiempoPromedioVisitas}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.horasTrabajadas}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.tiempoPromedioVisitas}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.horasTrabajadas}</TableCell>
                                     </>
                                 )}
                                 {filter === "inicioJornada" && (
@@ -864,11 +875,11 @@ const ExcelReader = () => {
                                             {row.Lider}
                                         </TableCell>
                                         <TableCell sx={{ fontSize: "1.2rem", textAlign: "center", ...getFaltanteStyle(row.Vendedor, vendedoresFaltantes) }}>
-                                        {capitalizeName(row.Vendedor)}
+                                            {capitalizeName(row.Vendedor)}
                                         </TableCell>
                                         <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.Fecha}</TableCell>
-                                        <TableCell sx={{ textAlign: "center",fontSize: "1.2rem", }}>{row.Planificados}</TableCell>
-                                        <TableCell sx={{ textAlign: "center", ...getCellStyle(row.HoraInicio, true) ,fontSize: "1.2rem",}}>
+                                        <TableCell sx={{ textAlign: "center", fontSize: "1.2rem", }}>{row.Planificados}</TableCell>
+                                        <TableCell sx={{ textAlign: "center", ...getCellStyle(row.HoraInicio, true), fontSize: "1.2rem", }}>
                                             {row.HoraInicio || "Sin registro"}
                                         </TableCell>
                                     </>
@@ -887,15 +898,15 @@ const ExcelReader = () => {
                                         >
                                             {row.Lider}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center", ...getFaltanteStyle(row.Vendedor, vendedoresFaltantes) }}>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center", ...getFaltanteStyle(row.Vendedor, vendedoresFaltantes) }}>
                                             {capitalizeName(row.Vendedor)}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.Fecha}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.ClientesPlanificados}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center", ...getCumplimientoStyle(row.CumplimientoRuta, true) }}>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.Fecha}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.ClientesPlanificados}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center", ...getCumplimientoStyle(row.CumplimientoRuta, true) }}>
                                             {row.CumplimientoRuta}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{"$" + (row.ValorTotal?.toFixed(2) || "0.00")}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{"$" + (row.ValorTotal?.toFixed(2) || "0.00")}</TableCell>
                                     </>
                                 )}
                                 {filter === "finalizacionJornada" && (
@@ -912,23 +923,24 @@ const ExcelReader = () => {
                                         >
                                             {row.Lider}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center", ...getFaltanteStyle(row.Vendedor, vendedoresFaltantes) }}>
-                                        {capitalizeName(row.Vendedor)}
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center", ...getFaltanteStyle(row.Vendedor, vendedoresFaltantes) }}>
+                                            {capitalizeName(row.Vendedor)}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.Fecha}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.Planificados}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.Totales}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.ClientesConVenta}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center", ...getVisitaStyle(row.EfectividadVisitas, true) }}>{row.EfectividadVisitas}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{row.EfectividadVentas}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center" }}>{"$" + (row.ValorTotal?.toFixed(2) || "0.00")}</TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center", ...getCellStyle(row.HoraInicio, true) }}>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.Fecha}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.Planificados}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.Totales}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.ClientesConVenta}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center", ...getVisitaStyle(row.EfectividadVisitas, true) }}>{row.EfectividadVisitas}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.EfectividadVentas}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{"$" + (row.ValorTotal?.toFixed(2) || "0.00")}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center", ...getCellStyle(row.HoraInicio, true) }}>
                                             {row.HoraInicio || "Sin registro"}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center", ...getCellStyle(row.HoraFin, false) }}>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center", ...getCellStyle(row.HoraFin, false) }}>
                                             {row.HoraFin || "Sin registro"}
                                         </TableCell>
-                                        <TableCell sx={{ fontSize: "1.2rem",textAlign: "center", ...getTrabajdasStyle(row.HorasTrabajadas, true) }}>{row.HorasTrabajadas || "Sin registro"}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center", ...getTrabajdasStyle(row.HorasTrabajadas, true) }}>{row.HorasTrabajadas || "Sin registro"}</TableCell>
+                                        <TableCell sx={{ fontSize: "1.2rem", textAlign: "center" }}>{row.TiempoPromedioVisitas}</TableCell>
                                     </>
                                 )}
                             </StyledTableRow>
