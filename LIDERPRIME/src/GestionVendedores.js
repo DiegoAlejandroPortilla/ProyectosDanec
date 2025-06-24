@@ -386,9 +386,10 @@ const ExcelReader = () => {
                         vendedores[key].clientesProcesados.add(clientKey);
                     }
 
-                    // Modificación aquí para incluir ambos tipos de registros de efectividad
+                    // Modificación aquí para incluir tipos de registros de efectividad
                     if ((Tipo === "00-Registro de Efectividad de Visita" ||
-                        Tipo === "00-Registro de Efectividad de Visita Espejo") &&
+                        Tipo === "00-Registro de Efectividad de Visita Espejo" ||
+                        Tipo === "00-Registro Actividades Líder") &&
                         parseFloat(distancia) <= 50) {
                         if (!vendedores[key].registrosEfectividad.has(razon)) {
                             vendedores[key].registrosEfectividad.set(razon, programado !== "FUERA DE RUTA" ? 1 : 0);
@@ -425,6 +426,7 @@ const ExcelReader = () => {
                         } else if (
                             tipos.includes("00-Registro de Efectividad de Visita Vendedor") ||
                             tipos.includes("00-Registro de Efectividad de Visita Espejo") ||
+                            tipos.includes("00-Registro Actividades Líder") ||
                             tipos.includes("20-Cambio de producto")
                         ) {
                             vendedor.Clientes_Sin_Venta.add(cliente);
